@@ -10,8 +10,15 @@ not listed here is a bug in one of the two runtimes.
 **Async-first.** Every operation that can reach storage returns a `Task<T>` and takes a
 `CancellationToken`: the storage port (`IStorageAdaptor`), and later the gateway, the unit of
 work and queries. The Cosmos SDK is asynchronous, and a synchronous port would block a thread
-per request. Pure value types and policy evaluation stay synchronous: a policy decides about an
-entity that is already loaded.
+per request.
+
+**Policies are async too, as `ValueTask`.** A policy can need to consult something ("the viewer
+is a member of this ticket's project" is a lookup, and on Cosmos an asynchronous one), and the
+application implements the policy interfaces that step 14 generates, so the signature has to
+allow it from the start: `IEntityReadPolicies.DecideAsync`, `IEntityWritePolicies.DecideAsync`,
+and on the gates `ReadGate.PermitAsync`/`RetainAsync` and `WriteGate.PermitAsync`. A policy that
+only reads fields of the entity completes synchronously and allocates nothing. Pure value types
+stay synchronous, and so does the viewer: `IViewer` is request data already in memory.
 
 ## Names
 
@@ -20,7 +27,7 @@ The mapping is mechanical so generated code can compute it.
 | PHP | C# | Why |
 |---|---|---|
 | an interface, `StorageAdaptor` | `IStorageAdaptor` | .NET convention; the plan fixes the `I` prefix |
-| a method, `get()` that reaches storage | `GetAsync()` | .NET convention for `Task`-returning methods |
+| a method that reaches storage or a policy, `get()` or `decide()` | `GetAsync()`, `DecideAsync()` | .NET convention for `Task`- and `ValueTask`-returning methods |
 | an exception, `AccessDenied`, `UnsupportedCapability` | `AccessDeniedException`, `UnsupportedCapabilityException` | .NET convention; analyzers enforce it |
 | `Filter::equals`, `Filter::notEquals`, `Comparison::Equals`, `Comparison::NotEquals` | `Filter.Equal`, `Filter.NotEqual`, `Comparison.Equal`, `Comparison.NotEqual` | a member called `Equals` collides with `object.Equals` |
 | `Criteria->order` | `Criteria.Orders` | a property named `Order` would hide the `Order` type inside `Criteria` |

@@ -27,8 +27,14 @@ public sealed class WriteGate
     /// <param name="entity">The entity.</param>
     /// <param name="original">The entity as it was before the write; <see langword="null" /> on create.</param>
     /// <param name="context">What the write is.</param>
+    /// <param name="cancellationToken">Cancels the decision.</param>
+    /// <returns>A task that completes when the write is permitted.</returns>
     /// <exception cref="AccessDeniedException">A policy refused.</exception>
-    public void Permit(string entity, object? original, IWriteContext context)
+    public async ValueTask PermitAsync(
+        string entity,
+        object? original,
+        IWriteContext context,
+        CancellationToken cancellationToken = default)
     {
         var policies = catalogue.WritePolicies(entity);
 
@@ -37,7 +43,9 @@ public sealed class WriteGate
             return;
         }
 
-        var decision = policies.Decide(original, context, viewers.Viewer());
+        var decision = await policies
+            .DecideAsync(original, context, viewers.Viewer(), cancellationToken)
+            .ConfigureAwait(false);
 
         if (decision.Outcome != PolicyOutcome.Allow)
         {

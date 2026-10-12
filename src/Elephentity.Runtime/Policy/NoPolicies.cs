@@ -4,10 +4,16 @@ namespace Elephentity.Runtime.Policy;
 public sealed class NoPolicies : IEntityReadPolicies, IEntityWritePolicies
 {
     /// <inheritdoc />
-    public PolicyDecision Decide(object entity, IViewer viewer) => PolicyDecision.Allow();
+    public ValueTask<PolicyDecision> DecideAsync(object entity, IViewer viewer, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(PolicyDecision.Allow());
 
     /// <inheritdoc />
-    public PolicyDecision Decide(object? entity, IWriteContext context, IViewer viewer) => PolicyDecision.Allow();
+    public ValueTask<PolicyDecision> DecideAsync(
+        object? entity,
+        IWriteContext context,
+        IViewer viewer,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(PolicyDecision.Allow());
 
     /// <inheritdoc />
     public bool IsEmpty() => true;

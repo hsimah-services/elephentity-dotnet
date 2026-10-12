@@ -37,16 +37,19 @@ public sealed partial class ReadGate
     /// <summary>Lets <paramref name="instance" /> through, or throws when the viewer may not read it.</summary>
     /// <param name="entity">The entity.</param>
     /// <param name="instance">The hydrated entity.</param>
+    /// <param name="cancellationToken">Cancels the decision.</param>
     /// <returns>The same object.</returns>
     /// <exception cref="AccessDeniedException">A policy refused.</exception>
-    public object Permit(string entity, object instance)
+    public async ValueTask<object> PermitAsync(string entity, object instance, CancellationToken cancellationToken = default)
     {
         if (!Guards(entity))
         {
             return instance;
         }
 
-        var decision = catalogue.ReadPolicies(entity).Decide(instance, viewers.Viewer());
+        var decision = await catalogue.ReadPolicies(entity)
+            .DecideAsync(instance, viewers.Viewer(), cancellationToken)
+            .ConfigureAwait(false);
 
         if (decision.Outcome != PolicyOutcome.Allow)
         {
@@ -59,8 +62,12 @@ public sealed partial class ReadGate
     /// <summary>Drops the objects the viewer may not read, logging each at debug.</summary>
     /// <param name="entity">The entity.</param>
     /// <param name="instances">The hydrated entities.</param>
+    /// <param name="cancellationToken">Cancels the filtering.</param>
     /// <returns>The ones the viewer may read, in their original order.</returns>
-    public IReadOnlyList<object> Retain(string entity, IReadOnlyList<object> instances)
+    public async ValueTask<IReadOnlyList<object>> RetainAsync(
+        string entity,
+        IReadOnlyList<object> instances,
+        CancellationToken cancellationToken = default)
     {
         if (!Guards(entity))
         {
@@ -72,7 +79,9 @@ public sealed partial class ReadGate
 
         foreach (var instance in instances)
         {
-            var decision = catalogue.ReadPolicies(entity).Decide(instance, viewer);
+            var decision = await catalogue.ReadPolicies(entity)
+                .DecideAsync(instance, viewer, cancellationToken)
+                .ConfigureAwait(false);
 
             if (decision.Outcome == PolicyOutcome.Allow)
             {

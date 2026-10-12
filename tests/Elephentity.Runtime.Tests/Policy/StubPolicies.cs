@@ -9,11 +9,11 @@ internal sealed class StubPolicies(Func<object, IViewer, PolicyDecision> handler
 {
     public int Calls { get; private set; }
 
-    public PolicyDecision Decide(object entity, IViewer viewer)
+    public ValueTask<PolicyDecision> DecideAsync(object entity, IViewer viewer, CancellationToken cancellationToken = default)
     {
         Calls++;
 
-        return handler(entity, viewer);
+        return ValueTask.FromResult(handler(entity, viewer));
     }
 
     public bool IsEmpty() => false;
@@ -23,11 +23,15 @@ internal sealed class StubWritePolicies(Func<object?, IWriteContext, IViewer, Po
 {
     public int Calls { get; private set; }
 
-    public PolicyDecision Decide(object? entity, IWriteContext context, IViewer viewer)
+    public ValueTask<PolicyDecision> DecideAsync(
+        object? entity,
+        IWriteContext context,
+        IViewer viewer,
+        CancellationToken cancellationToken = default)
     {
         Calls++;
 
-        return handler(entity, context, viewer);
+        return ValueTask.FromResult(handler(entity, context, viewer));
     }
 
     public bool IsEmpty() => false;
@@ -55,6 +59,20 @@ internal sealed class StubCatalogue : IEntityCatalogue
     public IEntityReadPolicies ReadPolicies(string entity) => read.GetValueOrDefault(entity) ?? new NoPolicies();
 
     public IEntityWritePolicies WritePolicies(string entity) => write.GetValueOrDefault(entity) ?? new NoPolicies();
+}
+
+/// <summary>A policy that has to wait for something, as one consulting a document store would.</summary>
+internal sealed class SlowPolicies(Func<object, PolicyDecision> handler) : IEntityReadPolicies
+{
+    public async ValueTask<PolicyDecision> DecideAsync(object entity, IViewer viewer, CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return handler(entity);
+    }
+
+    public bool IsEmpty() => false;
 }
 
 /// <summary>A mutation context with nothing in it: enough for a policy to be handed one.</summary>
