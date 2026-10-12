@@ -67,8 +67,36 @@ because C# looks for a namespace before it looks at a `using`. Application code 
 - **A whole-valued float in a keyset cursor reads back as an integer.** JSON writes `2.0` as `2`.
   The two compare equal, which is all a resumed sort needs.
 
-## Pulled forward from step 11
+## Step 11: mutations, unit of work, gateway, queries
 
-Step 10's gates and processors name four types the plan files under step 11, so their minimum
-is here and step 11 completes them: `IEntityCatalogue` (the two policy accessors only),
-`IMutationContext` and `ActionCall`, and `Verification` and `Violation`.
+- **Async all the way down.** The unit of work, `DeletionPlanner`, `UniquenessCheck`, the gateway
+  and the queries are `async` and take a `CancellationToken`. Side-effect handlers are
+  `Func<CancellationToken, ValueTask>` and field verifiers are `IEntityVerifiers.VerifyAsync`,
+  because both may consult storage. Read and write *processors* stay synchronous: they map one
+  value and touch nothing.
+- **No reflection.** PHP finds `ItemFinder::byBarcode()`, `ItemMutator::rename()` and `getName()`
+  by `method_exists` and a string. Here the generated catalogue does the call itself:
+  `RunQueryAsync(entity, query, args)`, `RunActionAsync(entity, mutation, call)` and
+  `ValuesOf(entity, instance)`. `finder()` and `mutatorFor()` do not exist.
+- **Edge mutation is `Add`, `Remove`, `Replace`.** `Set` is a reserved word in other .NET languages
+  (CA1716), so `Mutation.Set` is `Assign` and `Edge(..).set` is `Replace`.
+- **Moments are stored as UTC ISO 8601** (`o`), which sorts as the moments do, not as
+  `Y-m-d H:i:s`. `ValueDecoder.DateTime` still reads the old form, as UTC.
+- **A C# `enum` with no write processor is refused** by `ValueEncoder` with a message naming the
+  field. How an enum is stored is the .NET builder's decision (step 14); `ValueDecoder.Enum<T>`
+  takes the generated `FromWire`.
+- **`ValueDecoder` is a static class** and names the rest `Text`, `Whole` and `Number`, because
+  `String`, `Int` and `Float` trip CA1720.
+- **Post-commit side-effect failures** are logged through a source-generated `[LoggerMessage]`
+  and swallowed, as PHP's are, except `OperationCanceledException`, which propagates.
+- **`DependencySorter` is static**: it holds no state.
+- **Paging an entity with read policies resumes by keyset.** PHP re-reads every earlier row on
+  every page (`CHUNK` = 100). `LazyEntityQuery` reads chunks *after* the `KeysetCursor` in the
+  criteria's total order (sort keys, then id), keeps what the viewer may see, and stops once the
+  page is full and one more visible row proves there is a next page. The cursor it returns names
+  the last visible row, so hidden rows leave no trace in it and page *n* costs what it scans, not
+  everything before it. A cursor that is not a keyset position (an offset, or garbage) restarts
+  the list and is logged at Debug. `Count()` of a gated entity still hydrates and filters.
+  An ungated entity hands the cursor to storage untouched.
+- **`BootCheck`** resolves each catalogue contract from the `IServiceProvider` and reports every
+  missing one in one `MissingImplementationsException`.

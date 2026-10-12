@@ -37,10 +37,12 @@ internal sealed class StubWritePolicies(Func<object?, IWriteContext, IViewer, Po
     public bool IsEmpty() => false;
 }
 
-internal sealed class StubCatalogue : IEntityCatalogue
+internal class StubCatalogue : IEntityCatalogue
 {
     private readonly Dictionary<string, IEntityReadPolicies> read = [];
     private readonly Dictionary<string, IEntityWritePolicies> write = [];
+
+    public List<System.Type> ContractTypes { get; } = [];
 
     public StubCatalogue Reading(string entity, IEntityReadPolicies policies)
     {
@@ -59,6 +61,66 @@ internal sealed class StubCatalogue : IEntityCatalogue
     public IEntityReadPolicies ReadPolicies(string entity) => read.GetValueOrDefault(entity) ?? new NoPolicies();
 
     public IEntityWritePolicies WritePolicies(string entity) => write.GetValueOrDefault(entity) ?? new NoPolicies();
+
+    public IReadOnlyList<System.Type> Contracts() => ContractTypes;
+
+    public virtual IReadOnlyList<string> Entities() => [];
+
+    public virtual global::Elephentity.Runtime.Query.IHydrator<object> Hydrator(string entity) => throw new NotSupportedException();
+
+    public virtual global::Elephentity.Runtime.Verification.IEntityVerifiers Verifiers(string entity) => throw new NotSupportedException();
+
+    public virtual IEntitySideEffects SideEffects(string entity) => throw new NotSupportedException();
+
+    public IReadOnlyList<global::Elephentity.Runtime.Storage.DeletionRule> DeletionRules(string entity) => [];
+
+    public IReadOnlyDictionary<string, string> EdgeTargets() => new Dictionary<string, string>();
+
+    public IReadOnlyDictionary<string, string> FieldTypes() => new Dictionary<string, string>();
+
+    public IReadOnlyList<string> FieldNames(string entity) => [];
+
+    public IReadOnlyList<string> RequiredFields(string entity) => [];
+
+    public IReadOnlyList<string> NonNullableFields(string entity) => [];
+
+    public IReadOnlyList<string> RequiredEdges(string entity) => [];
+
+    public IReadOnlyList<string> UniqueFields(string entity) => [];
+
+    public IReadOnlyDictionary<string, Managed> ManagedFields() => new Dictionary<string, Managed>();
+
+    public IReadOnlyList<string> QueryArguments(string entity, string query) => [];
+
+    public IReadOnlyList<string> ActionArguments(string entity, string action) => [];
+
+    public IReadOnlyDictionary<string, object?> DecodeActionArguments(
+        string entity,
+        string action,
+        IReadOnlyDictionary<string, object?> args) => args;
+
+    public void Apply(string entity, IMutationBuffer buffer, IReadOnlyDictionary<string, object?> input)
+    {
+        foreach (var (field, value) in input)
+        {
+            buffer.Assign(field, value);
+        }
+    }
+
+    public ValueTask<object?> RunQueryAsync(
+        string entity,
+        string query,
+        IReadOnlyDictionary<string, object?> args,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    public ValueTask RunActionAsync(
+        string entity,
+        IMutableMutationContext mutation,
+        ActionCall action,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    public IReadOnlyDictionary<string, object?> ValuesOf(string entity, object instance) =>
+        new Dictionary<string, object?>();
 }
 
 /// <summary>A policy that has to wait for something, as one consulting a document store would.</summary>
