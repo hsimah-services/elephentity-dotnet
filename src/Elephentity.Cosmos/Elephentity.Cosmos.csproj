@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>The Elephentity storage adaptor for Azure Cosmos DB.</Description>
+  </PropertyGroup>
+
+</Project>

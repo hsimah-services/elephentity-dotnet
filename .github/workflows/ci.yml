@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The SDK feature band is pinned in global.json.
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Formatting
+        run: dotnet format --verify-no-changes
+
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Tests
+        run: dotnet test -c Release --no-build
+
+      - name: Pack
+        run: dotnet pack -c Release --no-build -o artifacts -p:Version=0.0.0-ci
+
+      - name: One package per project, each declaring the MIT licence
+        run: |
+          test "$(ls artifacts/*.nupkg | wc -l)" -eq 6
+          for package in artifacts/*.nupkg; do
+            unzip -p "$package" '*.nuspec' | grep -q '<license type="expression">MIT</license>'
+          done

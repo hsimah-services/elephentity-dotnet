@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Elephentity GraphQL support for GraphQL.NET, emitting the same schema as the PHP runtime.</Description>
+  </PropertyGroup>
+
+</Project>

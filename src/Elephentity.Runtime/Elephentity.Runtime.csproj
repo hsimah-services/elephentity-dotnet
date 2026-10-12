@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>The Elephentity runtime: the storage port, unit of work, verification and policy contracts that generated code runs on.</Description>
+  </PropertyGroup>
+
+</Project>
