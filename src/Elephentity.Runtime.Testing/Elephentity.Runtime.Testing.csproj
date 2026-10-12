@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Conformance and contract checks for Elephentity storage adaptors and generated code.</Description>
+  </PropertyGroup>
+
+</Project>

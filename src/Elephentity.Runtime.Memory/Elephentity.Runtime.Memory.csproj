@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>The Elephentity in-memory storage driver, with no physical schema and no platform.</Description>
+  </PropertyGroup>
+
+</Project>
