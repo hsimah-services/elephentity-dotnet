@@ -32,7 +32,7 @@ dotnet_style_qualification_for_method = false:warning
 dotnet_style_qualification_for_event = false:warning
 csharp_style_var_for_built_in_types = false:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
-dotnet_style_require_accessibility_modifiers = always:warning
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
 csharp_style_expression_bodied_methods = when_on_single_line:suggestion
 
 # Test names read as sentences.
