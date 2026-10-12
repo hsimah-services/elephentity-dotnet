@@ -10,9 +10,11 @@ and the code generators are Rust programs; this repository holds only what the g
 code needs at run time. The plan, the decisions and the ordered steps are in the
 [.NET epic](https://github.com/hsimah-services/elephentity/issues/115).
 
-> **Status: scaffold.** The solution, CI and publishing are in place and the packages are
-> empty. The runtime arrives in steps 10 to 12, Cosmos in 15, GraphQL in 17 and tsquid
-> in 19 of the epic.
+> **Status: under construction.** The storage port, identity, capabilities and the policy
+> model are in `Elephentity.Runtime` (step 10). The gateway and unit of work follow in step 11,
+> the memory driver and conformance in step 12, Cosmos in 15, GraphQL in 17 and tsquid in 19 of
+> the epic. Every difference from the PHP runtime is listed in
+> [docs/divergence.md](docs/divergence.md).
 
 ## Packages
 

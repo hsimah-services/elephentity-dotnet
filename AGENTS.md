@@ -44,6 +44,9 @@ once, in `Directory.Packages.props`. Do not put a `Version` on a `PackageReferen
 - **Port by name.** Every type ports from its PHP source in
   `elephentity/packages/runtime/src/...`, keeping its name and its tests. When the PHP code
   and its README disagree, the code wins. Say in the PR which file a type was ported from.
+  [docs/divergence.md](docs/divergence.md) lists every place the names or the behaviour
+  differ and why (the `I` prefix, the `Async` suffix, the `Exception` suffix, and a handful
+  of names a .NET analyzer refuses). Add to it in the same PR as the difference.
 - **Async-first is the only intended divergence.** The storage port, gateway and queries
   take a `CancellationToken` and return `Task` or `ValueTask`, because the Cosmos SDK is
   asynchronous. Anything else that differs from PHP is a bug in one of the two, or a
@@ -54,6 +57,9 @@ once, in `Directory.Packages.props`. Do not put a `Version` on a `PackageReferen
   together, as they do in PHP.
 - **Never edit generated files.** Change the builder and regenerate.
 - **MIT everywhere.** Every package declares `PackageLicenseExpression` MIT.
+- **Every public member is documented.** The build generates the XML documentation file with
+  warnings as errors, so a missing comment fails it. Reuse the PHP comment where it carries
+  the reasoning.
 - **Keep it simple.** This is a runtime for generated code, not a framework. No
   abstraction with one implementation, no option nobody asked for.
 
