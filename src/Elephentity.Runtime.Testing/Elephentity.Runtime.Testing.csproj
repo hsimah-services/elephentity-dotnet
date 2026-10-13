@@ -4,4 +4,8 @@
     <Description>Conformance and contract checks for Elephentity storage adaptors and generated code.</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../Elephentity.Runtime/Elephentity.Runtime.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -100,3 +100,39 @@ because C# looks for a namespace before it looks at a `using`. Application code 
   An ungated entity hands the cursor to storage untouched.
 - **`BootCheck`** resolves each catalogue contract from the `IServiceProvider` and reports every
   missing one in one `MissingImplementationsException`.
+
+## Step 12: the memory driver, conformance and the contract check
+
+- **`MemoryAdaptor` is `IDisposable`** (it owns a `SemaphoreSlim`) and thread-safe: one lock per
+  operation, and a second held for the whole of a transaction so two never interleave. A write
+  outside a transaction while one is open is part of the state a rollback restores; share an
+  adaptor between threads only if that is acceptable. Separate adaptors per test, which is what the
+  conformance base class does, need none of this.
+- **It honours the keyset contract** on `IStorageAdaptor.QueryAsync`: a `KeysetCursor` resumes
+  strictly after `(sort values, id)` in the criteria's total order and the page's `Next` is another
+  keyset cursor; any other cursor is an offset, as in PHP. A keyset cursor carrying a different
+  number of sort values than the criteria order by is refused with an `ArgumentException`.
+- **Filter values compare strictly by type**, as `===` does: `1` is not `"1"`. Ordering is total (a
+  missing value sorts first, numbers as numbers, different kinds by kind), so ordering a mixed
+  column never throws.
+- **`AdaptorConformance` is a list of named cases, not one `check()`.** `Cases(names)` gives
+  `ConformanceCase(Name, Func<IStorageAdaptor, CancellationToken, Task>)`; `CaseNames` is
+  adaptor-independent so a framework can enumerate them; `CheckAsync(create)` runs every case on a
+  fresh adaptor and returns the failures, as PHP's `check()` did. Each case seeds what it needs and
+  removes it, so cases also run in sequence against one adaptor (a live database). A case reports
+  every problem it finds. PHP's five checks are 22 cases, plus
+  `paging.keyset-cursor-resumes-strictly-after-its-position`, which PHP has no use for.
+- **`Elephentity.Runtime.Testing.Xunit`** is the separate package that makes the cases a `[Theory]`.
+  Its namespace is `Elephentity.Runtime.Testing.Xunit`, so inside it `Xunit` must be written
+  `global::Xunit`.
+- **`ContractCheck`** replaces the PHP `CheckCommand`'s walk of `*/verify.php`. It resolves every
+  `Contracts()` type from the application's `IServiceProvider` (a missing one is an error naming the
+  interface), then runs every `IVerifier` registered as `IEnumerable<IVerifier>`. It is an assertion
+  (`AssertConforms`) and a console entry point (`TryRunConsole`, argument `eleph-check`) that prints
+  the `{"severity","message"}` lines `eleph check` reads.
+- **`StubEntityCatalogue`** is public in `Elephentity.Runtime.Testing`: every collection empty,
+  every policy set `NoPolicies`, and anything that would run generated code throws until a test
+  overrides it. The PHP tests mocked the catalogue interface; there is no mock library here.
+- **`MutationLifecycleTest`** is ported in full (`MutationLifecycleTests`) and run against the real
+  `MemoryAdaptor` rather than a mock of storage, so it is also the first end-to-end proof that step 11's
+  runtime, unit of work and gates work through a real adaptor.

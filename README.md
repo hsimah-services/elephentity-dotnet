@@ -22,7 +22,8 @@ code needs at run time. The plan, the decisions and the ordered steps are in the
 |---|---|---|
 | `Elephentity.Runtime` | The storage port, unit of work, verification and policy contracts. Async-first. | `elephentity/packages/runtime` |
 | `Elephentity.Runtime.Memory` | The in-memory storage driver: no physical schema, no platform. | `elephentity/packages/memory` |
-| `Elephentity.Runtime.Testing` | Storage adaptor conformance and `ContractCheck`, which `eleph check` runs for C#. | `AdaptorConformance` |
+| `Elephentity.Runtime.Testing` | Storage adaptor conformance cases and `ContractCheck`, which `eleph check` runs for C#. | `AdaptorConformance` |
+| `Elephentity.Runtime.Testing.Xunit` | An xUnit base class that runs the conformance cases as a theory; inherit it to test an adaptor. | |
 | `Elephentity.Cosmos` | The storage adaptor for Azure Cosmos DB. | `elephentity-sqlite` |
 | `Elephentity.GraphQL` | GraphQL.NET support that emits the same schema as the PHP runtime. | `elephentity-graphql-php` |
 | `Elephentity.Tsquid` | Server-side initial route data for ASP.NET Core. | `elephentity-codegen-tsquid` |
