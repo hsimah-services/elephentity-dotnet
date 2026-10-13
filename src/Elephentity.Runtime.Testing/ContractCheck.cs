@@ -45,17 +45,34 @@ public sealed class ContractCheck
     }
 
     /// <summary>Runs the check.</summary>
+    /// <remarks>
+    /// Always runs to the end. A contract whose implementation is registered but cannot be built (a constructor
+    /// dependency nobody registered is the usual way) throws when it is resolved, and a verifier can throw too;
+    /// each becomes an error signal naming it, so one problem never hides the rest. Only cancellation escapes.
+    /// </remarks>
     /// <returns>Every signal found, contracts first, then the verifiers' in registration order.</returns>
     public IReadOnlyList<Signal> Run()
     {
         var signals = new List<Signal>();
         var contracts = catalogue.Contracts();
 
-        foreach (var contract in contracts.Where(contract => services.GetService(contract) is null))
+        foreach (var contract in contracts)
         {
-            signals.Add(new Signal(
-                Severity.Error,
-                $"{contract.FullName} has no implementation registered. The generated code requires one; implement it and register it."));
+            try
+            {
+                if (services.GetService(contract) is null)
+                {
+                    signals.Add(new Signal(
+                        Severity.Error,
+                        $"{contract.FullName} has no implementation registered. The generated code requires one; implement it and register it."));
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                signals.Add(new Signal(
+                    Severity.Error,
+                    $"{contract.FullName} is registered but its implementation cannot be built: {Describe(exception)}"));
+            }
         }
 
         if (signals.Count == 0)
@@ -63,15 +80,44 @@ public sealed class ContractCheck
             signals.Add(new Signal(Severity.Info, $"{contracts.Count} generated contract(s) resolve."));
         }
 
-        var verifiers = services.GetService(typeof(IEnumerable<IVerifier>)) as IEnumerable<IVerifier> ?? [];
-
-        foreach (var verifier in verifiers)
+        foreach (var verifier in Verifiers(signals))
         {
-            signals.AddRange(verifier.Verify(classFor));
+            try
+            {
+                signals.AddRange(verifier.Verify(classFor));
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                signals.Add(new Signal(
+                    Severity.Error,
+                    $"The verifier {verifier.GetType().FullName} failed instead of reporting: {Describe(exception)}"));
+            }
         }
 
         return signals;
     }
+
+    private List<IVerifier> Verifiers(List<Signal> signals)
+    {
+        try
+        {
+            return [.. services.GetService(typeof(IEnumerable<IVerifier>)) as IEnumerable<IVerifier> ?? []];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            signals.Add(new Signal(
+                Severity.Error,
+                $"The registered verifiers cannot be built, so none were run: {Describe(exception)}"));
+
+            return [];
+        }
+    }
+
+    /// <summary>The exception's own message, and the first inner one, which for a failed construction is the cause.</summary>
+    private static string Describe(Exception exception) =>
+        exception.InnerException is { } inner && inner.Message != exception.Message
+            ? $"{exception.Message} ({inner.Message})"
+            : exception.Message;
 
     /// <summary>The check as an assertion for a test.</summary>
     /// <exception cref="ContractCheckException">Any signal is an error; its message lists them all.</exception>

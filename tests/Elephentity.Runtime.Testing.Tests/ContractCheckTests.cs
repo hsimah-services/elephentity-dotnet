@@ -20,6 +20,20 @@ public sealed class ContractCheckTests
             bound.FirstOrDefault(entry => entry.Type == serviceType).Instance;
     }
 
+    /// <summary>A container whose registrations can fail to build, as one with a missing constructor dependency does.</summary>
+    private sealed class FailingServices(System.Type failing, System.Type? bound = null) : IServiceProvider
+    {
+        public object? GetService(System.Type serviceType) =>
+            serviceType == failing
+                ? throw new InvalidOperationException($"Unable to resolve service for type 'IClock' while attempting to activate '{failing.Name}'.")
+                : serviceType == bound ? new object() : null;
+    }
+
+    private sealed class ThrowingVerifier : IVerifier
+    {
+        public IReadOnlyList<Signal> Verify(Func<string, string> classFor) => throw new InvalidOperationException("the schema file is gone");
+    }
+
     private sealed class Verifier(params Signal[] signals) : IVerifier
     {
         public IReadOnlyList<Signal> Verify(Func<string, string> classFor) => [.. signals, new Signal(Severity.Info, classFor("Item"))];
@@ -47,6 +61,67 @@ public sealed class ContractCheckTests
         var failure = Assert.Throws<ContractCheckException>(check.AssertConforms);
 
         Assert.Equal(2, failure.Errors.Count);
+    }
+
+    [Fact]
+    public void AContractThatCannotBeBuiltAndAMissingOneAreBothReported()
+    {
+        var check = new ContractCheck(
+            new Catalogue(typeof(IItemVerifier), typeof(IItemHandler), typeof(IComparable)),
+            new FailingServices(typeof(IItemVerifier), typeof(IComparable)));
+
+        var failure = Assert.Throws<ContractCheckException>(check.AssertConforms);
+
+        Assert.Equal(2, failure.Errors.Count);
+        Assert.Contains($"{typeof(IItemVerifier).FullName} is registered but its implementation cannot be built", failure.Errors[0].Message, StringComparison.Ordinal);
+        Assert.Contains("IClock", failure.Errors[0].Message, StringComparison.Ordinal);
+        Assert.Contains($"{typeof(IItemHandler).FullName} has no implementation registered", failure.Errors[1].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AThrowingVerifierIsReportedAndTheOthersStillRun()
+    {
+        var verifiers = new IVerifier[]
+        {
+            new ThrowingVerifier(),
+            new Verifier(new Signal(Severity.Warning, "still ran")),
+        };
+        var check = new ContractCheck(new Catalogue(), new Services((typeof(IEnumerable<IVerifier>), verifiers)));
+
+        var signals = check.Run();
+
+        Assert.Contains(signals, signal => signal.Severity == Severity.Error
+            && signal.Message.Contains("ThrowingVerifier", StringComparison.Ordinal)
+            && signal.Message.Contains("the schema file is gone", StringComparison.Ordinal));
+        Assert.Contains(signals, signal => signal is { Severity: Severity.Warning, Message: "still ran" });
+    }
+
+    [Fact]
+    public void VerifiersThatCannotBeBuiltAreReportedAndTheContractsAreStillChecked()
+    {
+        var check = new ContractCheck(new Catalogue(typeof(IItemHandler)), new FailingServices(typeof(IEnumerable<IVerifier>)));
+
+        var errors = check.Run().Where(signal => signal.Severity == Severity.Error).ToList();
+
+        Assert.Equal(2, errors.Count);
+        Assert.Contains("has no implementation registered", errors[0].Message, StringComparison.Ordinal);
+        Assert.Contains("verifiers cannot be built", errors[1].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheConsoleEntryPointPrintsSignalsInsteadOfCrashingWhenAContractCannotBeBuilt()
+    {
+        var output = new StringWriter();
+
+        Assert.True(ContractCheck.TryRunConsole(
+            ["eleph-check"],
+            new Catalogue(typeof(IItemVerifier)),
+            new FailingServices(typeof(IItemVerifier)),
+            output,
+            out var exitCode));
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("cannot be built", output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -24,7 +24,8 @@ namespace Elephentity.Runtime.Memory;
 /// <para>
 /// <b>Threads.</b> Every operation takes one lock, so separate tests sharing nothing and a few threads sharing an
 /// adaptor are both safe. A transaction snapshots on entry and restores on failure, and holds a second lock for
-/// its duration so two transactions never interleave. A write made <em>outside</em> a transaction while one is
+/// its duration so two transactions never interleave. Transactions do not nest: opening one inside another throws
+/// rather than waiting for itself. A write made <em>outside</em> a transaction while one is
 /// open is part of the state the snapshot restores, so share an adaptor between threads only if either nothing
 /// writes during a transaction or losing that write on rollback is acceptable.
 /// </para>
@@ -37,6 +38,7 @@ public sealed class MemoryAdaptor : IStorageAdaptor, IDisposable
 {
     private readonly Lock gate = new();
     private readonly SemaphoreSlim transactions = new(1, 1);
+    private readonly AsyncLocal<bool> inTransaction = new();
 
     private Dictionary<string, OrderedDictionary<string, Record>> records = [];
     private Dictionary<string, Dictionary<string, List<string>>> relations = [];
@@ -142,7 +144,16 @@ public sealed class MemoryAdaptor : IStorageAdaptor, IDisposable
     /// <inheritdoc />
     public async Task<T> TransactionAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
     {
+        // The lock is not reentrant, so a transaction opened inside another would wait for itself for ever.
+        // Say so instead.
+        if (inTransaction.Value)
+        {
+            throw new InvalidOperationException(
+                "MemoryAdaptor transactions do not nest: TransactionAsync was called from inside another TransactionAsync on the same adaptor.");
+        }
+
         await transactions.WaitAsync(cancellationToken).ConfigureAwait(false);
+        inTransaction.Value = true;
 
         try
         {
@@ -163,6 +174,7 @@ public sealed class MemoryAdaptor : IStorageAdaptor, IDisposable
         }
         finally
         {
+            inTransaction.Value = false;
             transactions.Release();
         }
     }

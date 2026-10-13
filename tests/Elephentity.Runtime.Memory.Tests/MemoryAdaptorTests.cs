@@ -135,6 +135,21 @@ public sealed class MemoryAdaptorTests
     }
 
     [Fact]
+    public async Task ATransactionOpenedInsideAnotherFailsInsteadOfWaitingForItself()
+    {
+        using var adaptor = new MemoryAdaptor();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => adaptor.TransactionAsync(
+            token => adaptor.TransactionAsync(_ => Task.FromResult(1), token),
+            Token));
+
+        Assert.Contains("do not nest", failure.Message, StringComparison.Ordinal);
+
+        // The lock was released: a transaction afterwards works.
+        Assert.Equal(7, await adaptor.TransactionAsync(_ => Task.FromResult(7), Token));
+    }
+
+    [Fact]
     public async Task TransactionsDoNotInterleave()
     {
         using var adaptor = new MemoryAdaptor();
