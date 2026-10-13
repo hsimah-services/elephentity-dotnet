@@ -76,6 +76,58 @@ public sealed class QueryTests
     }
 
     [Fact]
+    public async Task WhenEveryRowIsHiddenThePageIsEmptyAfterOneWalkOfTheSet()
+    {
+        var (query, storage) = Gated(rows: 250, hide: _ => true);
+
+        var page = await query.PageAsync(10, null, Token);
+
+        Assert.True(page.IsEmpty);
+        Assert.Null(page.Next);
+        Assert.Equal(250, storage.Scanned);
+    }
+
+    [Fact]
+    public async Task CursorsFollowedAcrossChunkBoundariesReachEveryVisibleRowOnceInOrder()
+    {
+        // Chunk is 100, so rows 100, 200, 300 and 400 are each the last row of a chunk, and they are hidden,
+        // as are the rows either side of the first boundary. Seven does not divide 100.
+        bool Hidden(long n) => n % 100 == 0 || n is 99 or 101 or 201;
+        var (query, _) = Gated(rows: 450, hide: Hidden);
+        var seen = new List<long>();
+        ICursor? cursor = null;
+        var pages = 0;
+
+        do
+        {
+            var page = await query.PageAsync(7, cursor, Token);
+            seen.AddRange(page.Items.Select(N));
+            cursor = page.Next;
+            pages++;
+        }
+        while (cursor is not null && pages < 1000);
+
+        Assert.Equal(Enumerable.Range(1, 450).Select(n => (long)n).Where(n => !Hidden(n)), seen);
+    }
+
+    [Fact]
+    public async Task AnAdaptorThatIgnoresKeysetCursorsFailsInsteadOfSpinning()
+    {
+        // Every row is hidden, so the walk has to ask for a second chunk, which an adaptor that starts again
+        // answers with the first one.
+        var storage = new IgnoringCursorStorage();
+        var catalogue = new StubCatalogue().Reading("Post", new StubPolicies((_, _) => PolicyDecision.Deny("hidden")));
+        var queries = new Queries(storage, new NoEdges(), new ReadGate(catalogue, new AnonymousViewerProvider()));
+        var query = queries.Of(new RecordHydrator(), Criteria.For("Post").OrderBy(Order.Ascending("n")));
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () => await query.PageAsync(5, null, Token));
+
+        Assert.Contains("Post", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("keyset cursor", failure.Message, StringComparison.Ordinal);
+        Assert.True(storage.Calls <= 3, $"the walk made {storage.Calls} calls before giving up");
+    }
+
+    [Fact]
     public async Task FirstFindsAReadableRowBehindADeniedOne()
     {
         var (query, _) = Gated(rows: 5, hide: n => n < 3);
@@ -208,5 +260,21 @@ internal sealed class SortedStorage(int rows) : FakeStorage
             : null;
 
         return Task.FromResult(new Page<Record>(page, next));
+    }
+}
+
+/// <summary>An adaptor that cannot read a keyset cursor and starts again, as PHP's offset reading does.</summary>
+internal sealed class IgnoringCursorStorage : FakeStorage
+{
+    public int Calls { get; private set; }
+
+    public override Task<Page<Record>> QueryAsync(Criteria criteria, CancellationToken cancellationToken = default)
+    {
+        Calls++;
+        var page = Enumerable.Range(1, criteria.Limit ?? 100)
+            .Select(n => new Record("Post", EntityId.Of(n), new Dictionary<string, object?> { ["n"] = (long)n }))
+            .ToList();
+
+        return Task.FromResult(new Page<Record>(page, new KeysetCursor([page[^1].Value("n")], page[^1].Id)));
     }
 }

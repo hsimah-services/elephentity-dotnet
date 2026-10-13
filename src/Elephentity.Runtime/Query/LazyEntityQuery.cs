@@ -21,8 +21,9 @@ namespace Elephentity.Runtime.Query;
 /// order (the sort keys, then the id); each chunk is hydrated and filtered, and reading stops when the page is
 /// full and one more visible row proves there is a next page. The cursor handed back names the last visible row
 /// by its sort values and id, so a hidden row leaves no trace in it, and the next page costs what it scans, not
-/// everything before it. The PHP runtime re-walks every earlier row on every page; this does not, and the storage
-/// adaptor's contract (<see cref="IStorageAdaptor.QueryAsync" />) says how it resumes. An ungated entity passes
+/// everything before it. The PHP runtime re-walks every earlier row on every page; this does not. It depends on the
+/// adaptor resuming strictly after a <see cref="KeysetCursor" /> (<see cref="IStorageAdaptor.QueryAsync" /> says so),
+/// and fails with an exception naming the entity rather than looping when one does not. An ungated entity passes
 /// the cursor straight to storage.
 /// </para>
 /// </remarks>
@@ -159,11 +160,23 @@ public sealed partial class LazyEntityQuery<T> : IEntityQuery<T>
         KeysetCursor? from,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        ICursor? cursor = from;
+        var cursor = from;
 
         while (true)
         {
             var page = await storage.QueryAsync(criteria.Take(Chunk, cursor), cancellationToken).ConfigureAwait(false);
+
+            // Resuming strictly after a position means the row at that position is never in the answer. An
+            // adaptor that cannot read a keyset cursor starts again, so the row is there, and this walk would
+            // never end: a request that hangs instead of one that says why.
+            if (cursor is not null && page.Items.Any(record => record.Id == cursor.Id))
+            {
+                throw new InvalidOperationException(
+                    $"The storage adaptor did not resume {criteria.Entity} after the keyset cursor it was given "
+                    + $"(it returned the row at {cursor.Id} again). A policy-gated entity is read by keyset, so the adaptor "
+                    + "must return only rows strictly after (sort values, id); see IStorageAdaptor.QueryAsync.");
+            }
+
             var objects = page.Items.Select(record => hydrator.Hydrate(record, edges)).ToList();
             var retained = await gate.RetainAsync(criteria.Entity, [.. objects], cancellationToken).ConfigureAwait(false);
             var visible = new HashSet<object>(retained, ReferenceEqualityComparer.Instance);

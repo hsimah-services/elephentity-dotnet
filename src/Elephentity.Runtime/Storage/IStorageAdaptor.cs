@@ -58,9 +58,20 @@ public interface IStorageAdaptor
     /// Return rows in criteria order.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Paged criteria end in the unique id order term; batched relationship rows with the same id
     /// must also order by their parent id. Zero pages terminate, negative limits fail, and bounded
     /// pages cap at <see cref="Page{T}.MaxLimit" />.
+    /// </para>
+    /// <para>
+    /// <b>Resuming by keyset.</b> Given a <see cref="KeysetCursor" /> as <see cref="Criteria.After" />, return only the
+    /// rows strictly after the position <c>(SortValues…, Id)</c> in the criteria's total order: its sort terms, then
+    /// the id. The row at the position itself is never returned. Reading a gated entity relies on this to cost what
+    /// it scans rather than everything before it, and an adaptor that cannot honour it fails the walk with an
+    /// <see cref="InvalidOperationException" /> naming the entity. An adaptor's own cursors (an offset, a continuation
+    /// token) are still returned in <see cref="Page{T}.Next" /> and accepted back; only a <see cref="KeysetCursor" />
+    /// must be understood as a position.
+    /// </para>
     /// </remarks>
     /// <param name="criteria">What to fetch.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
