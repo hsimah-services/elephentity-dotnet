@@ -4,4 +4,8 @@
     <Description>The Elephentity in-memory storage driver, with no physical schema and no platform.</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../Elephentity.Runtime/Elephentity.Runtime.csproj" />
+  </ItemGroup>
+
 </Project>
