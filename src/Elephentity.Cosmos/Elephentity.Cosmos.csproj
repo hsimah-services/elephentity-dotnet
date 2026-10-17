@@ -2,6 +2,17 @@
 
   <PropertyGroup>
     <Description>The Elephentity storage adaptor for Azure Cosmos DB.</Description>
+    <!-- The SDK asks for an explicit Newtonsoft.Json reference because its default serializer uses it. This adaptor
+         never uses that serializer (documents go through System.Text.Json, see CosmosSystemTextJsonSerializer), and the
+         SDK keeps its own transitive Newtonsoft dependency for its system types. -->
+    <AzureCosmosDisableNewtonsoftJsonCheck>true</AzureCosmosDisableNewtonsoftJsonCheck>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Elephentity.Runtime/Elephentity.Runtime.csproj" />
+    <PackageReference Include="Azure.Core" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" />
+    <InternalsVisibleTo Include="Elephentity.Cosmos.Tests" />
+  </ItemGroup>
 
 </Project>

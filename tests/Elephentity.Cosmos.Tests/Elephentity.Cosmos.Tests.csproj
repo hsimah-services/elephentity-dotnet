@@ -1,7 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <!-- The SDK check flows to everything that references the adaptor; see Elephentity.Cosmos.csproj. -->
+    <AzureCosmosDisableNewtonsoftJsonCheck>true</AzureCosmosDisableNewtonsoftJsonCheck>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="../../src/Elephentity.Cosmos/Elephentity.Cosmos.csproj" />
+    <ProjectReference Include="../../src/Elephentity.Runtime.Memory/Elephentity.Runtime.Memory.csproj" />
+    <ProjectReference Include="../../src/Elephentity.Runtime.Testing.Xunit/Elephentity.Runtime.Testing.Xunit.csproj" />
   </ItemGroup>
 
 </Project>
