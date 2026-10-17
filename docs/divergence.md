@@ -136,3 +136,17 @@ because C# looks for a namespace before it looks at a `using`. Application code 
 - **`MutationLifecycleTest`** is ported in full (`MutationLifecycleTests`) and run against the real
   `MemoryAdaptor` rather than a mock of storage, so it is also the first end-to-end proof that step 11's
   runtime, unit of work and gates work through a real adaptor.
+
+## Step 15: Cosmos
+
+- **`paging.oversized-pages-cap-with-an-effective-size-cursor` accepts a keyset cursor.** PHP's case required an offset cursor standing at
+  `Page::MAX_LIMIT`. An adaptor that resumes by keyset has no number to check, so the case accepts either: an offset cursor must still
+  stand at the effective size, a keyset cursor must be returned, and in both the walk that follows must resume without gaps or
+  repeats, which is the property that matters. The case keeps its name.
+- **Cosmos never emits an `OffsetCursor`** (it accepts one). See `docs/cosmos.md`.
+- **`TransactionAsync` stages and flushes.** Cosmos has no multi-request transaction, so the writes made inside one are collected
+  and sent as a single `TransactionalBatch` when the work returns. Reads inside do not see staged writes; the memory driver's do.
+- **Ids are made by the adaptor** (UUIDv7 strings), not by the store, so a row's id is known before it is written.
+- **A missing property is "not equal"** in `Filter.NotEqual`, as in the memory driver; Cosmos alone would leave the row out.
+- **Documents are `JsonObject`s** and the adaptor is `IsAotCompatible` (it builds clean with the analyzers on), but the Cosmos SDK
+  itself is not trim-safe; an application that publishes with Native AOT should check the SDK's own status.

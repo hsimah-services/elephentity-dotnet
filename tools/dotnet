@@ -46,8 +46,24 @@ if [ -t 0 ] && [ -t 1 ]; then
     TTY_ARGS=(-it)
 fi
 
+# The Cosmos tests run against the emulator when told where it is (ELEPH_COSMOS_ENDPOINT, ELEPH_COSMOS_KEY) and
+# skip otherwise. ELEPH_DOTNET_NETWORK=host lets the container reach an emulator published on the host's loopback.
+ENV_ARGS=()
+for variable in ELEPH_COSMOS_ENDPOINT ELEPH_COSMOS_KEY; do
+    if [ -n "${!variable:-}" ]; then
+        ENV_ARGS+=(-e "$variable=${!variable}")
+    fi
+done
+
+NETWORK_ARGS=()
+if [ -n "${ELEPH_DOTNET_NETWORK:-}" ]; then
+    NETWORK_ARGS=(--network "$ELEPH_DOTNET_NETWORK")
+fi
+
 exec "$ENGINE" run --rm \
     "${TTY_ARGS[@]}" \
+    "${NETWORK_ARGS[@]}" \
+    "${ENV_ARGS[@]}" \
     "${USER_ARGS[@]}" \
     `# :z relabels the mount for SELinux, which Fedora enforces by default.` \
     -v "$PWD:/app:z" \

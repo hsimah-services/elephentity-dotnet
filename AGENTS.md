@@ -31,7 +31,7 @@ warning is a failed build.
 | `src/Elephentity.Runtime.Memory` | Port of `packages/memory` (step 12) |
 | `src/Elephentity.Runtime.Testing` | Port of `AdaptorConformance` as framework-agnostic cases, plus `ContractCheck` and `StubEntityCatalogue` (step 12) |
 | `src/Elephentity.Runtime.Testing.Xunit` | The xUnit base class that runs the conformance cases as a theory (step 12) |
-| `src/Elephentity.Cosmos` | The Cosmos DB adaptor (step 15) |
+| `src/Elephentity.Cosmos` | The Cosmos DB adaptor, installer and backup (step 15); see [docs/cosmos.md](docs/cosmos.md) |
 | `src/Elephentity.GraphQL` | GraphQL.NET, the same schema as `elephentity-graphql-php` (step 17) |
 | `src/Elephentity.Tsquid` | Server-side initial data for tsquid (step 19) |
 | `tests/*.Tests` | One xUnit v3 project per package |
