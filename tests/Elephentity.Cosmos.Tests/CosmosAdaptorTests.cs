@@ -135,6 +135,39 @@ public sealed class CosmosAdaptorTests
     }
 
     [Fact]
+    public async Task ATransactionOnOneAdaptorDoesNotCaptureAWriteToAnother()
+    {
+        var first = Blog(out _);
+        var second = Blog(out _);
+
+        await first.TransactionAsync(
+            async token =>
+            {
+                await second.WriteAsync(new WriteBatch(new Insert("Tag", new PendingId("Tag"), new Dictionary<string, object?> { ["label"] = "elsewhere" })), token);
+
+                return 0;
+            },
+            Token);
+
+        // It landed in the second adaptor's container at once, and nothing in the first's.
+        Assert.Equal(1, await second.CountAsync(Criteria.For("Tag").Unbounded(), Token));
+        Assert.Equal(0, await first.CountAsync(Criteria.For("Tag").Unbounded(), Token));
+    }
+
+    [Fact]
+    public async Task ATransactionOpenedInsideAnotherIsRefused()
+    {
+        var adaptor = Blog(out _);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => adaptor.TransactionAsync(
+            token => adaptor.TransactionAsync(_ => Task.FromResult(0), token),
+            Token));
+
+        Assert.Contains("do not nest", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(0, await adaptor.CountAsync(Criteria.For("Tag").Unbounded(), Token));
+    }
+
+    [Fact]
     public async Task RowsAndTheirLinksWrittenInOneTransactionAppearTogether()
     {
         var adaptor = Blog(out _);

@@ -44,7 +44,9 @@ namespace Elephentity.Cosmos;
 /// </remarks>
 public sealed partial class CosmosAdaptor : IStorageAdaptor, IDisposable
 {
-    private static readonly AsyncLocal<WriteBuffer?> Active = new();
+    // Per adaptor, not static: the open transaction belongs to this container, and a write to another adaptor from
+    // inside it must not be staged here.
+    private readonly AsyncLocal<WriteBuffer?> active = new();
 
     private readonly Container container;
     private readonly CosmosStorageManifest manifest;
@@ -226,7 +228,7 @@ public sealed partial class CosmosAdaptor : IStorageAdaptor, IDisposable
     {
         var result = new WriteResult();
 
-        if (Active.Value is { } buffer)
+        if (active.Value is { } buffer)
         {
             await StageAsync(batch, result, buffer, cancellationToken).ConfigureAwait(false);
 
@@ -243,28 +245,30 @@ public sealed partial class CosmosAdaptor : IStorageAdaptor, IDisposable
     /// <inheritdoc />
     public async Task<T> TransactionAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
     {
-        // Already inside one: this is part of it, as a savepoint would be.
-        if (Active.Value is not null)
+        // Joining the outer transaction would not be a savepoint: an inner failure the caller catches would leave its
+        // writes in the outer buffer to commit. MemoryAdaptor refuses too, so the two behave alike.
+        if (active.Value is not null)
         {
-            return await work(cancellationToken).ConfigureAwait(false);
+            throw new InvalidOperationException(
+                "CosmosAdaptor transactions do not nest: TransactionAsync was called from inside another TransactionAsync on the same adaptor.");
         }
 
         var buffer = new WriteBuffer();
-        Active.Value = buffer;
+        active.Value = buffer;
 
         try
         {
             var value = await work(cancellationToken).ConfigureAwait(false);
 
             // Sent only now, and only if the work finished: that is the rollback.
-            Active.Value = null;
+            active.Value = null;
             await FlushAsync(buffer, cancellationToken).ConfigureAwait(false);
 
             return value;
         }
         finally
         {
-            Active.Value = null;
+            active.Value = null;
         }
     }
 
