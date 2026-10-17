@@ -149,4 +149,26 @@ public sealed class ManifestTests
         Assert.NotEqual(UniqueKeys.Value("Item", sensitive, "#i1", "x"), UniqueKeys.Filler("Item", "i1"));
         Assert.NotEqual(UniqueKeys.Value("Item", sensitive, "x", "a"), UniqueKeys.Value("Post", sensitive, "x", "a"));
     }
+
+    [Fact]
+    public void TwoEntitiesOrderedByTheSamePropertyShareOneCompositeIndex()
+    {
+        var manifest = new CosmosStorageManifest(
+            "p",
+            new Dictionary<string, CosmosEntityLayout>
+            {
+                ["A"] = new("A", Fields("rank")),
+                ["B"] = new("B", Fields("rank")),
+            },
+            [
+                new CosmosOrdering("A", [Order.Ascending("rank")]),
+                new CosmosOrdering("B", [Order.Ascending("rank")]),
+                new CosmosOrdering("B", [Order.Descending("rank")]),
+            ]);
+
+        var indexes = CosmosInstaller.Properties(manifest).IndexingPolicy.CompositeIndexes;
+
+        // Ascending is shared by A and B; descending is a different index.
+        Assert.Equal(2, indexes.Count);
+    }
 }
