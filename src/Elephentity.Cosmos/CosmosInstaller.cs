@@ -107,6 +107,10 @@ public static class CosmosInstaller
             indexing.ExcludedPaths.Add(new ExcludedPath { Path = $"/{DocumentProperties.UniqueSlot(slot)}/?" });
         }
 
+        // The indexing policy belongs to the container, not to an entity, and Cosmos refuses the same composite twice. Two
+        // entities that sort by the same property (a `rank` on both) want the same index, so it is made once.
+        var made = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var ordering in manifest.Orderings)
         {
             var layout = manifest.Entity(ordering.Entity);
@@ -117,11 +121,16 @@ public static class CosmosInstaller
                 terms.Add(Order.Ascending("id"));
             }
 
-            indexing.CompositeIndexes.Add(new Collection<CompositePath>([.. terms.Select(term => new CompositePath
+            var composite = terms.Select(term => new CompositePath
             {
                 Path = "/" + layout.Property(term.Field),
                 Order = term.Direction == Direction.Descending ? CompositePathSortOrder.Descending : CompositePathSortOrder.Ascending,
-            })]));
+            }).ToList();
+
+            if (made.Add(string.Join('|', composite.Select(path => $"{path.Path}:{path.Order}"))))
+            {
+                indexing.CompositeIndexes.Add(new Collection<CompositePath>(composite));
+            }
         }
 
         return properties;
