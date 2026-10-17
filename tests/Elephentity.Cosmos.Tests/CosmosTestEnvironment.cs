@@ -1,6 +1,8 @@
 using Elephentity.Cosmos.Manifest;
 using Microsoft.Azure.Cosmos;
 
+[assembly: AssemblyFixture(typeof(Elephentity.Cosmos.Tests.CosmosRun))]
+
 namespace Elephentity.Cosmos.Tests;
 
 /// <summary>
@@ -29,6 +31,29 @@ internal sealed class CosmosTestEnvironment
     }
 
     public CosmosClient Client { get; }
+
+    /// <summary>
+    /// Deletes this run's database and disposes the client, whose background threads would otherwise keep the test
+    /// process from exiting. Does nothing when no environment was ever used.
+    /// </summary>
+    public static async ValueTask ShutdownAsync()
+    {
+        if (!Shared.IsValueCreated || Shared.Value is not { } environment)
+        {
+            return;
+        }
+
+        try
+        {
+            await environment.Client.GetDatabase(environment.Database).DeleteAsync().ConfigureAwait(false);
+        }
+        catch (CosmosException)
+        {
+            // The run is over; a leftover test database is not worth failing it for.
+        }
+
+        environment.Client.Dispose();
+    }
 
     public string Database { get; }
 
@@ -80,18 +105,16 @@ internal sealed class CosmosTestEnvironment
         var client = new CosmosClientSettings(AllowAnyServerCertificate: emulator, ApplicationName: "elephentity-tests").CreateClient(endpoint, key);
         var database = $"eleph-tests-{Guid.NewGuid():N}";
 
-        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
-        {
-            try
-            {
-                client.GetDatabase(database).DeleteAsync().GetAwaiter().GetResult();
-            }
-            catch (CosmosException)
-            {
-                // The run is over; a leftover test database is not worth failing it for.
-            }
-        };
-
         return new CosmosTestEnvironment(client, database);
     }
+}
+
+/// <summary>Runs once, after the last test in the assembly.</summary>
+public sealed class CosmosRun : IAsyncLifetime
+{
+    /// <inheritdoc />
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    /// <inheritdoc />
+    public ValueTask DisposeAsync() => CosmosTestEnvironment.ShutdownAsync();
 }
