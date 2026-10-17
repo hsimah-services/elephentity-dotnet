@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Azure.Cosmos;
 
 namespace Elephentity.Cosmos.Serialization;
@@ -39,6 +40,12 @@ public sealed class CosmosSystemTextJsonSerializer : CosmosSerializer
         if (input is null)
         {
             stream.Write("null"u8);
+        }
+        else if (input is JsonNode node)
+        {
+            // Any node, whatever its concrete type (a value, an object, an array): they know how to write themselves.
+            using var writer = new Utf8JsonWriter(stream);
+            node.WriteTo(writer);
         }
         else
         {

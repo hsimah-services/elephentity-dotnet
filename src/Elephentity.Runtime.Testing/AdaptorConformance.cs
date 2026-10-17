@@ -317,9 +317,13 @@ public static class AdaptorConformance
         var ids = await c.SeedMany(Enumerable.Range(0, Page<Record>.MaxLimit + 1).Select(n => ($"bounded-{n}", n))).ConfigureAwait(false);
         var first = await c.Adaptor.QueryAsync(Criteria.For(c.Names.Entity).Take(Page<Record>.MaxLimit + 50), c.Token).ConfigureAwait(false);
 
+        // An offset cursor must stand at the effective size. A keyset cursor has no number to check, so the walk below is what
+        // proves it resumes where the page stopped.
         c.Expect(
-            first.Items.Count == Page<Record>.MaxLimit && first.HasMore && OffsetCursor.From(first.Next).Value == Page<Record>.MaxLimit,
-            "Oversized pages must cap at Page.MaxLimit with an effective-size cursor.");
+            first.Items.Count == Page<Record>.MaxLimit
+                && first.HasMore
+                && (first.Next is KeysetCursor || OffsetCursor.From(first.Next).Value == Page<Record>.MaxLimit),
+            "Oversized pages must cap at Page.MaxLimit with a cursor that resumes after the rows returned.");
 
         if (first.HasMore)
         {

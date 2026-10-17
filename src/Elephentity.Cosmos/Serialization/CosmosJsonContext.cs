@@ -13,15 +13,20 @@ namespace Elephentity.Cosmos.Serialization;
 /// </remarks>
 [JsonSourceGenerationOptions(WriteIndented = false)]
 [JsonSerializable(typeof(JsonObject))]
+[JsonSerializable(typeof(JsonObject[]))]
+[JsonSerializable(typeof(List<JsonObject>))]
 [JsonSerializable(typeof(JsonNode))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(JsonArray))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(long))]
+[JsonSerializable(typeof(long[]))]
 [JsonSerializable(typeof(int))]
 [JsonSerializable(typeof(double))]
+[JsonSerializable(typeof(double[]))]
 [JsonSerializable(typeof(bool))]
+[JsonSerializable(typeof(object[]))]
 internal sealed partial class CosmosJsonContext : JsonSerializerContext
 {
 }

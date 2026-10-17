@@ -12,8 +12,8 @@ internal static class Layouts
     /// Post.author is many-to-one (the reference is Post's own <c>authorId</c>), Post.comments is one-to-many (each
     /// Comment carries <c>postId</c>), Post.tags is many-to-many (join documents).
     /// </summary>
-    public static CosmosStorageManifest Blog() => new(
-        Partition,
+    public static CosmosStorageManifest Blog(string partition = Partition, string container = "blog") => new(
+        partition,
         new Dictionary<string, CosmosEntityLayout>
         {
             ["Post"] = new(
@@ -30,7 +30,8 @@ internal static class Layouts
             ["Comment"] = new("Comment", new Dictionary<string, string> { ["body"] = "body", ["type"] = "kind" }),
             ["Tag"] = new("Tag", new Dictionary<string, string> { ["label"] = "label" }),
         },
-        [new CosmosOrdering("Post", [Order.Descending("rank")])]);
+        [new CosmosOrdering("Post", [Order.Descending("rank")])],
+        container);
 
     /// <summary>The same entities, with the names the conformance suite uses.</summary>
     public static CosmosStorageManifest Conformance(string partition = "conformance") => new(
@@ -47,5 +48,6 @@ internal static class Layouts
                 }),
             ["ConformanceRelated"] = new("ConformanceRelated", new Dictionary<string, string> { ["name"] = "name" }),
         },
-        [new CosmosOrdering("ConformanceEntity", [Order.Ascending("rank")]), new CosmosOrdering("ConformanceEntity", [Order.Descending("rank")])]);
+        [new CosmosOrdering("ConformanceEntity", [Order.Ascending("rank")]), new CosmosOrdering("ConformanceEntity", [Order.Descending("rank")])],
+        "conformance");
 }

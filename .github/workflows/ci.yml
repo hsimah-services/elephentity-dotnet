@@ -43,3 +43,44 @@ jobs:
           for package in artifacts/*.nupkg; do
             unzip -p "$package" '*.nuspec' | grep -q '<license type="expression">MIT</license>'
           done
+
+  # The Cosmos adaptor against the Azure Cosmos DB Linux emulator. The plain job above skips those tests, because they
+  # need ELEPH_COSMOS_ENDPOINT; this one sets it. The emulator takes a minute or two to start, so the job waits for it.
+  cosmos:
+    name: Cosmos emulator
+    runs-on: ubuntu-latest
+
+    services:
+      cosmos:
+        image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+        ports:
+          - 8081:8081
+          - 10250-10255:10250-10255
+        env:
+          AZURE_COSMOS_EMULATOR_PARTITION_COUNT: 3
+          AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Wait for the emulator
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -ksf https://localhost:8081/_explorer/emulator.pem -o /dev/null; then
+              echo "Emulator ready after $attempt attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "The Cosmos emulator did not become ready." >&2
+          docker ps -a
+          exit 1
+
+      - name: Cosmos tests
+        env:
+          ELEPH_COSMOS_ENDPOINT: https://localhost:8081
+        run: dotnet test tests/Elephentity.Cosmos.Tests -c Release
