@@ -165,4 +165,31 @@ public sealed class SchemaTests
         Assert.Contains("\"C\"", failure.Message, StringComparison.Ordinal);
         Assert.Contains("\"BToC\"", failure.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task APublishedCollectionQueryWithNoArgumentsGetsNoWhereInput()
+    {
+        var manifest = BookModel.Manifest();
+        var withQuery = new GraphQLManifest(
+            manifest.Objects,
+            manifest.Enums,
+            manifest.Mutations,
+            manifest.Roots,
+            new Dictionary<string, QueryFieldEntry>(manifest.Queries)
+            {
+                ["recentBooks"] = new("recentBooks", "Book", true, "Book", "recent"),
+            });
+
+        var schema = ElephentitySchema.Build(withQuery);
+        var sdl = ElephentitySchemaPrinter.Print(schema);
+
+        // An input object with no fields is not valid GraphQL, so there is no where; the connection is still named by the field.
+        Assert.Contains("recentBooks(after: String, before: String, first: Int, last: Int): RootQueryToRecentBooksConnection", sdl, StringComparison.Ordinal);
+        Assert.DoesNotContain("RootQueryToRecentBooksConnectionWhereArgs", sdl, StringComparison.Ordinal);
+
+        var host = new Host(manifest: withQuery);
+        var result = await host.Run("{ __type(name: \"RootQueryToRecentBooksConnection\") { name } }");
+
+        Assert.Equal("RootQueryToRecentBooksConnection", result.GetProperty("data").GetProperty("__type").GetProperty("name").GetString());
+    }
 }

@@ -170,6 +170,9 @@ same spec: `tests/fixtures/graphql/book-author.graphql` is what the PHP package 
 - **Cursors are the runtime's keyset cursors.** A page knows where it ends, not where each row is, so only the last edge of a page
   carries a cursor (also `pageInfo.endCursor`). PHP's positional cursors gave every edge one. So `pageInfo.startCursor` is null unless the
   page holds a single row, and `endCursor` is null on the last page; in PHP they always named the first and last edge.
+- **A published collection query with no arguments has no `where`.** PHP registers an input object with no fields for it, which GraphQL
+  refuses (webonyx `assertValid` fails the same way), so the PHP stack cannot publish such a query; here it is a connection named by the
+  field, with no `where` argument and no `WhereArgs` type.
 - **`totalCount` is counted only when selected.**
 - **Page sizes are options** (`DefaultPageSize` 10, `MaxPageSize` 100). The reference application, hblake, configures 20.
 - **Edge connections page the lazy query**, as PHP does. Batching a to-many edge across parents through a DataLoader is deferred:
