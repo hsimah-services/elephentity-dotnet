@@ -84,3 +84,37 @@ jobs:
         env:
           ELEPH_COSMOS_ENDPOINT: https://localhost:8081
         run: dotnet test tests/Elephentity.Cosmos.Tests -c Release
+
+  # The payload the .NET middleware inlines, read by the real tsquid client (`readInitialData` / `withInitialData`), at the tsquid commit in
+  # tests/Elephentity.Tsquid.Tests/tsquid.sha. The dotnet container has no node, so this is where that check runs.
+  tsquid-client:
+    name: The real tsquid client accepts the payload
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: tsquid at the pinned commit
+        run: |
+          git clone https://github.com/hsimah-services/tsquid.git tsquid
+          git -C tsquid checkout "$(cat tests/Elephentity.Tsquid.Tests/tsquid.sha)"
+          corepack enable
+          cd tsquid
+          pnpm install --frozen-lockfile
+          pnpm --filter @tsquid/routes build
+
+      - name: Write the payload
+        env:
+          TSQUID_PAYLOAD_OUT: ${{ github.workspace }}/payload.json
+        run: dotnet test tests/Elephentity.Tsquid.Tests -c Release
+
+      - name: Read it with the client
+        run: node tests/Elephentity.Tsquid.Tests/client.mjs tsquid/packages/routes/dist/initialData.js payload.json
