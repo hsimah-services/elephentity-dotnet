@@ -150,3 +150,34 @@ because C# looks for a namespace before it looks at a `using`. Application code 
 - **A missing property is "not equal"** in `Filter.NotEqual`, as in the memory driver; Cosmos alone would leave the row out.
 - **Documents are `JsonObject`s** and the adaptor is `IsAotCompatible` (it builds clean with the analyzers on), but the Cosmos SDK
   itself is not trim-safe; an application that publishes with Native AOT should check the SDK's own status.
+
+## Step 17: GraphQL
+
+`Elephentity.GraphQL` ports `elephentity-graphql-php`. The schema it builds is meant to be indistinguishable from the PHP one for the
+same spec: `tests/fixtures/graphql/book-author.graphql` is what the PHP package prints for a small model (normalised as
+`tsquid-schema fetch` does), and a test requires the C# schema to print the same bytes. Where the C# differs:
+
+- **Delegates, not accessor names.** PHP's `FieldEntry` and `ConnectionEntry` name a method and call it; C# carries the accessor
+  (`Func<object, object?>`, `Func<object, IEntityQuery<object>>`) and `ObjectTypeEntry` an `IsInstance` delegate, so nothing uses
+  reflection and the compiler checks the generated manifest against the read models.
+- **`ReadAsync`.** A to-one edge costs a query (`GetAuthorAsync` on the read model), so `FieldEntry` can carry an async reader instead of `Read`.
+- **No `BackedEnum` encoding.** The generated `<Enum>Wire` class turns a C# enum into its stored value, so the field's delegate
+  returns the stored value and the encoding is `Value`.
+- **`GraphQLManifest`, `MutationKind`** replace `Manifest` and the string constants.
+- **The package finishes what PHP left to the application** (`docs/extraction.md` there): `Node`, `PageInfo` and `node(id:)` are
+  registered; a wrong-type global id is an error; a malformed cursor is an error; backward paging is refused; `first: 0` is an empty
+  page; errors map to `extensions.code` (`FORBIDDEN`, `BAD_USER_INPUT` with `violations`, `NOT_FOUND`, masked `INTERNAL`).
+- **Cursors are the runtime's keyset cursors.** A page knows where it ends, not where each row is, so only the last edge of a page
+  carries a cursor (also `pageInfo.endCursor`). PHP's positional cursors gave every edge one. So `pageInfo.startCursor` is null unless the
+  page holds a single row, and `endCursor` is null on the last page; in PHP they always named the first and last edge.
+- **`totalCount` is counted only when selected.**
+- **Page sizes are options** (`DefaultPageSize` 10, `MaxPageSize` 100). The reference application, hblake, configures 20.
+- **Edge connections page the lazy query**, as PHP does. Batching a to-many edge across parents through a DataLoader is deferred:
+  `CachingEdgeLoader.PreloadAsync` has no per-parent limit or order, so it would ignore `first`/`after`. To-one fields are not
+  batched either: a to-one edge is a `FieldEntry` with an opaque `ReadAsync`, so the schema cannot tell which edge to preload without
+  a manifest change, and each costs a query per parent (cached per request). See the follow-up,
+  #15.
+- **Runtime additions.** `EntityQueries.AsObjects` (the inverse of `Cast`, for the untyped gateway surface) and
+  `EntityNotFoundException` (an `InvalidOperationException` subclass, so nothing that caught the old exception stops catching it).
+- **Declared collection queries must come back as `IEntityQuery<object>`** from `IEntityCatalogue.RunQueryAsync`; the C# builder's
+  catalogue returns a typed query today, so it needs `.AsObjects()` there.

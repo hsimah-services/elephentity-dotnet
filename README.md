@@ -12,7 +12,7 @@ code needs at run time. The plan, the decisions and the ordered steps are in the
 
 > **Status: under construction.** The storage port, identity, capabilities and the policy
 > model are in `Elephentity.Runtime` (step 10). The gateway and unit of work follow in step 11,
-> the memory driver and conformance in step 12, Cosmos in 15, GraphQL in 17 and tsquid in 19 of
+> the memory driver and conformance in step 12, Cosmos in 15, GraphQL in 17 (see [docs/graphql.md](docs/graphql.md)) and tsquid in 19 of
 > the epic. Every difference from the PHP runtime is listed in
 > [docs/divergence.md](docs/divergence.md).
 

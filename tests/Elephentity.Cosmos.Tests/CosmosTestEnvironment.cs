@@ -77,7 +77,26 @@ internal sealed class CosmosTestEnvironment
         {
             if (installed.Add(manifest.Container))
             {
+                Install(manifest);
+            }
+        }
+    }
+
+    // The emulator is slow to create containers when it is busy, and answers 408 or 503 instead of waiting; a real account does not.
+    // A test-environment allowance, never the adaptor's.
+    private void Install(CosmosStorageManifest manifest)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
                 CosmosInstaller.InstallAsync(Client, Database, manifest, cancellationToken: TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+
+                return;
+            }
+            catch (CosmosException failure) when (attempt < 5 && failure.StatusCode is System.Net.HttpStatusCode.RequestTimeout or System.Net.HttpStatusCode.ServiceUnavailable)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(5 * attempt));
             }
         }
     }

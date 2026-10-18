@@ -77,4 +77,26 @@ public sealed class EntityQueriesTests
 
     [Fact]
     public void ANullQueryIsRefused() => Assert.Throws<ArgumentNullException>(() => ((IEntityQuery<object>)null!).Cast<Post>());
+
+    [Fact]
+    public async Task AnObjectViewOfATypedQueryPagesCountsAndReadsTheSameRows()
+    {
+        var typed = new Fixed(new Post("a"), new Post("b")).Cast<Post>();
+        var objects = typed.AsObjects();
+
+        Assert.Equal(2, await objects.CountAsync(Token));
+        Assert.Equal(new Post("a"), (await objects.PageAsync(1, null, Token)).Items.Single());
+        Assert.True((await objects.PageAsync(1, null, Token)).HasMore);
+        Assert.Equal(2, (await objects.AllAsync(Token)).Count);
+        Assert.Equal(new Post("a"), await objects.FirstAsync(Token));
+        Assert.True(await objects.ExistsAsync(Token));
+    }
+
+    [Fact]
+    public void AnObjectQueryIsNotWrappedAgain()
+    {
+        var untyped = new Fixed(new Post("a"));
+
+        Assert.Same(untyped, untyped.AsObjects());
+    }
 }

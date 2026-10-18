@@ -231,7 +231,7 @@ public sealed class Runtime : IEntityGateway, IHydratorRegistry
 
     private async Task<object> RequireAsync(string entity, EntityId id, CancellationToken cancellationToken) =>
         await LoadAsync(entity, id, cancellationToken).ConfigureAwait(false)
-        ?? throw new InvalidOperationException($"There is no {entity} with id {id}.");
+        ?? throw new EntityNotFoundException(entity, id);
 
     private async ValueTask<object?> LoadAsync(string entity, EntityId id, CancellationToken cancellationToken)
     {

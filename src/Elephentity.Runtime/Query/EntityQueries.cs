@@ -26,6 +26,22 @@ public static class EntityQueries
         return new CastQuery<T>(query);
     }
 
+    /// <summary>A typed query as the untyped one the gateway speaks.</summary>
+    /// <typeparam name="T">The entity type.</typeparam>
+    /// <param name="query">The typed query.</param>
+    /// <returns>A query over the same set, whose rows are <see cref="object" />.</returns>
+    /// <remarks>
+    /// The inverse of <see cref="Cast{T}" />, for the places that hold an entity's type without naming it: an edge connection in
+    /// GraphQL, or a declared query the catalogue hands back through <c>object?</c>.
+    /// </remarks>
+    public static IEntityQuery<object> AsObjects<T>(this IEntityQuery<T> query)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return query is IEntityQuery<object> already ? already : new ObjectQuery<T>(query);
+    }
+
     private sealed class CastQuery<T>(IEntityQuery<object> inner) : IEntityQuery<T>
         where T : class
     {
@@ -43,6 +59,27 @@ public static class EntityQueries
 
         public async ValueTask<T?> FirstAsync(CancellationToken cancellationToken = default) =>
             (T?)await inner.FirstAsync(cancellationToken).ConfigureAwait(false);
+
+        public ValueTask<bool> ExistsAsync(CancellationToken cancellationToken = default) => inner.ExistsAsync(cancellationToken);
+    }
+
+    private sealed class ObjectQuery<T>(IEntityQuery<T> inner) : IEntityQuery<object>
+        where T : class
+    {
+        public ValueTask<long> CountAsync(CancellationToken cancellationToken = default) => inner.CountAsync(cancellationToken);
+
+        public async ValueTask<Page<object>> PageAsync(int limit, ICursor? after = null, CancellationToken cancellationToken = default)
+        {
+            var page = await inner.PageAsync(limit, after, cancellationToken).ConfigureAwait(false);
+
+            return new Page<object>([.. page.Items], page.Next);
+        }
+
+        public async ValueTask<IReadOnlyList<object>> AllAsync(CancellationToken cancellationToken = default) =>
+            [.. await inner.AllAsync(cancellationToken).ConfigureAwait(false)];
+
+        public async ValueTask<object?> FirstAsync(CancellationToken cancellationToken = default) =>
+            await inner.FirstAsync(cancellationToken).ConfigureAwait(false);
 
         public ValueTask<bool> ExistsAsync(CancellationToken cancellationToken = default) => inner.ExistsAsync(cancellationToken);
     }
