@@ -56,12 +56,11 @@ public sealed class SchemaTests
     }
 
     [Fact]
-    public void ATypeTheManifestDefinesTwiceIsReportedByName()
+    public void TwoEdgesToTheSameTypeAreTwoFieldsOfOneConnectionType()
     {
-        // Two connections that both come out as BookToAuthorConnection.
         var manifest = BookModel.Manifest();
         var book = manifest.Objects["Book"];
-        var twice = new GraphQLManifest(
+        var both = new GraphQLManifest(
             objects: new Dictionary<string, ObjectTypeEntry>(manifest.Objects)
             {
                 ["Book"] = new(
@@ -71,16 +70,32 @@ public sealed class SchemaTests
                     book.IsInstance,
                     new Dictionary<string, ConnectionEntry>(book.Connections)
                     {
-                        ["writers"] = new("writers", "Book", "Author", "authors", source => ((BookModel.Book)source).Authors()),
+                        ["editors"] = new("editors", "Book", "Author", "editors", source => ((BookModel.Book)source).Authors()),
                     },
                     book.Description),
             },
             enums: manifest.Enums,
             roots: manifest.Roots);
 
-        var failure = Assert.Throws<InvalidOperationException>(() => ElephentitySchema.Build(twice));
+        var sdl = ElephentitySchemaPrinter.Print(ElephentitySchema.Build(both));
 
-        Assert.Contains("BookToAuthorConnection", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("authors(after: String, before: String, first: Int, last: Int): BookToAuthorConnection", sdl, StringComparison.Ordinal);
+        Assert.Contains("editors(after: String, before: String, first: Int, last: Int): BookToAuthorConnection", sdl, StringComparison.Ordinal);
+        Assert.Equal(2, sdl.Split("type BookToAuthorConnection {").Length);
+    }
+
+    [Fact]
+    public void ATypeTheManifestDefinesTwiceIsReportedByName()
+    {
+        var manifest = BookModel.Manifest();
+        var clash = new GraphQLManifest(
+            objects: manifest.Objects,
+            enums: new Dictionary<string, EnumTypeEntry>(manifest.Enums) { ["Book"] = new("Book", new Dictionary<string, string> { ["A"] = "a" }) },
+            roots: manifest.Roots);
+
+        var failure = Assert.Throws<InvalidOperationException>(() => ElephentitySchema.Build(clash));
+
+        Assert.Contains("Two GraphQL types are named Book", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]

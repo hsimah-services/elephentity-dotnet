@@ -20,6 +20,7 @@ namespace Elephentity.GraphQL.Schema;
 internal sealed partial class SchemaAssembler(GraphQLManifest manifest, ElephentityGraphQLOptions options)
 {
     private readonly Dictionary<string, IGraphType> types = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> connectionTargets = new(StringComparer.Ordinal);
     private readonly ObjectGraphType query = new() { Name = "RootQuery" };
     private readonly ObjectGraphType mutation = new() { Name = "RootMutation" };
 
@@ -230,16 +231,8 @@ internal sealed partial class SchemaAssembler(GraphQLManifest manifest, Elephent
         context.RequestServices?.GetRequiredService<IEntityGateway>()
         ?? throw new InvalidOperationException("The execution has no request services, so there is no IEntityGateway to resolve against.");
 
-    /// <summary>A connection field on <paramref name="from" />, its types, and its arguments.</summary>
-    private void Connection(
-        ObjectGraphType from,
-        string fromName,
-        string to,
-        string fieldName,
-        IReadOnlyDictionary<string, GraphQLType>? whereArgs,
-        Func<IResolveFieldContext, ValueTask<object?>> resolve)
+    private void AddConnectionTypes(string name, string to, IReadOnlyDictionary<string, GraphQLType>? whereArgs)
     {
-        var name = $"{fromName}To{(whereArgs is null ? to : UpperFirst(fieldName))}Connection";
         var edge = new ObjectGraphType { Name = name + "Edge" };
 
         edge.AddField(Field("cursor", Ref("String"), resolver: new DelegateResolver(c => ((EdgeResult)c.Source!).Cursor)));
@@ -259,12 +252,6 @@ internal sealed partial class SchemaAssembler(GraphQLManifest manifest, Elephent
         Add(edge);
         Add(connection);
 
-        var arguments = new QueryArguments(
-            Argument("first", Ref("Int")),
-            Argument("after", Ref("String")),
-            Argument("last", Ref("Int")),
-            Argument("before", Ref("String")));
-
         if (whereArgs is not null)
         {
             var where = new InputObjectGraphType { Name = name + "WhereArgs" };
@@ -275,7 +262,44 @@ internal sealed partial class SchemaAssembler(GraphQLManifest manifest, Elephent
             }
 
             Add(where);
-            arguments.Add(Argument("where", Ref(where.Name)));
+        }
+    }
+
+    /// <summary>A connection field on <paramref name="from" />, its types, and its arguments.</summary>
+    private void Connection(
+        ObjectGraphType from,
+        string fromName,
+        string to,
+        string fieldName,
+        IReadOnlyDictionary<string, GraphQLType>? whereArgs,
+        Func<IResolveFieldContext, ValueTask<object?>> resolve)
+    {
+        var name = $"{fromName}To{(whereArgs is null ? to : UpperFirst(fieldName))}Connection";
+
+        // Two edges from one type to another (a Post's `related` and its inverse `relatedFrom`) are two fields of one connection
+        // type, as in PHP, where registering the type again was a harmless overwrite. Two targets under one name is a defect.
+        if (connectionTargets.TryGetValue(name, out var previous))
+        {
+            if (previous != to)
+            {
+                throw new InvalidOperationException($"GraphQL connection \"{name}\" targets both \"{previous}\" and \"{to}\".");
+            }
+        }
+        else
+        {
+            connectionTargets[name] = to;
+            AddConnectionTypes(name, to, whereArgs);
+        }
+
+        var arguments = new QueryArguments(
+            Argument("first", Ref("Int")),
+            Argument("after", Ref("String")),
+            Argument("last", Ref("Int")),
+            Argument("before", Ref("String")));
+
+        if (whereArgs is not null)
+        {
+            arguments.Add(Argument("where", Ref(name + "WhereArgs")));
         }
 
         from.AddField(new FieldType
