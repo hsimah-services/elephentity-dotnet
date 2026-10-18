@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Elephentity.Tsquid.Http;
 
@@ -16,6 +17,9 @@ namespace Elephentity.Tsquid.Http;
 public static class ApplicationBuilderExtensions
 {
     private static readonly string[] DefaultSkipped = ["/graphql", "/assets/"];
+
+    /// <summary>How long the page waits for its route's query before serving the shell for the client to fetch.</summary>
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(1);
 
     /// <summary>
     /// Serves the single-page app's HTML for every browser navigation, inlining the initial route's GraphQL response where the URL matches
@@ -28,25 +32,31 @@ public static class ApplicationBuilderExtensions
     /// Path prefixes this never touches: <c>/graphql</c> and <c>/assets/</c> unless said otherwise. Put the route you gave
     /// <c>MapElephentityGraphQL</c> here if it is not <c>/graphql</c>.
     /// </param>
+    /// <param name="timeout">
+    /// How long the page waits for the query (<see cref="DefaultTimeout" />, one second, when omitted). A page that would otherwise fetch the
+    /// data on load is better served without it than late; past the limit the plain shell is served, with no <c>Cache-Control</c>.
+    /// </param>
     /// <returns><paramref name="app" />.</returns>
     /// <remarks>
     /// Only <c>GET</c> requests that accept <c>text/html</c> are answered. The route's query runs through the executor that
     /// <c>AddElephentityGraphQL</c> registered, with the request's own services, so the viewer is the one whose page this is.
-    /// Whenever data is inlined the response is <c>Cache-Control: private, no-store</c>; with nothing to inline the shell is served as it
-    /// is. Nothing here times a slow query out: apply a timeout where the query runs, because the page waits for it.
+    /// Whenever data is inlined the response is <c>Cache-Control: private, no-store</c>; with nothing to inline (or a query that failed or
+    /// timed out) the shell is served as it is, and the reason is logged.
     /// </remarks>
     public static IApplicationBuilder UseElephentityTsquid(
         this IApplicationBuilder app,
         RouteManifest manifest,
         Func<HttpContext, ValueTask<string?>> indexHtml,
-        IReadOnlyList<string>? skippedPaths = null)
+        IReadOnlyList<string>? skippedPaths = null,
+        TimeSpan? timeout = null)
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(indexHtml);
 
-        var initial = new InitialData(manifest);
+        var initial = new InitialData(manifest, app.ApplicationServices.GetService<ILoggerFactory>()?.CreateLogger<InitialData>());
         var skipped = skippedPaths ?? DefaultSkipped;
+        var limit = timeout ?? DefaultTimeout;
 
         return app.Use(async (http, next) =>
         {
@@ -60,8 +70,12 @@ public static class ApplicationBuilderExtensions
             // The raw target, still percent-encoded: the matching rules read the URL as the client wrote it, and Request.Path has
             // already decoded it.
             var target = http.Features.Get<IHttpRequestFeature>()?.RawTarget is { Length: > 0 } raw ? raw : http.Request.Path + http.Request.QueryString;
+            using var timer = CancellationTokenSource.CreateLinkedTokenSource(http.RequestAborted);
+
+            timer.CancelAfter(limit);
+
             var page = await initial
-                .RenderAsync(target, html, (text, variables, operation, _, token) => Execute(http, text, variables, operation, token), http.RequestAborted)
+                .RenderAsync(target, html, (text, variables, operation, _, token) => Execute(http, text, variables, operation, token), timer.Token)
                 .ConfigureAwait(false);
 
             foreach (var (name, value) in page.Headers)
@@ -94,6 +108,9 @@ public static class ApplicationBuilderExtensions
             Variables = new Inputs(new Dictionary<string, object?>(variables)),
         };
         var result = await executor.ExecuteAsync(request, http.RequestServices, cancellationToken).ConfigureAwait(false);
+
+        // A query that was cut off can come back as a result full of errors; that is not a response to inline.
+        cancellationToken.ThrowIfCancellationRequested();
 
         return executor.Serializer.Serialize(result);
     }

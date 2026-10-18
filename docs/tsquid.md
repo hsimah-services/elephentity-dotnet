@@ -21,7 +21,9 @@ app.MapElephentityGraphQL("/graphql");
 - When data is inlined the response is `Cache-Control: private, no-store`. With nothing to inline (no match, `ssr: false`, no query, a query
   that failed) the shell is served unchanged.
 - The query runs through `ElephentityGraphQLExecutor` with the request's own services, so the viewer is the one whose page this is.
-  Nothing here times a slow query out: the page waits for it, so apply a timeout where the query runs.
+  A query that takes longer than `timeout` (one second unless you pass another) is abandoned and the plain shell is served, as the SKILL
+  asks: a page that would otherwise fetch on load is better without the data than late. A query that fails or is abandoned is logged
+  (warning, with the route and operation); one that gives no response is logged at debug.
 - Every less-than sign in the payload is written `<` and U+2028/U+2029 are escaped, so a response cannot close the script element.
 
 ## Where the rules come from

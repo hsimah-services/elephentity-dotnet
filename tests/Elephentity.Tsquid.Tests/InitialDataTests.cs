@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Elephentity.Tsquid.Manifest;
+using Microsoft.Extensions.Logging;
 
 namespace Elephentity.Tsquid.Tests;
 
@@ -210,5 +211,61 @@ public sealed partial class InitialDataTests
         Assert.Throws<InvalidOperationException>(() => new RouteManifest([], 2));
         Assert.Throws<InvalidOperationException>(() => ManifestJson.Parse("{\"version\":2,\"routes\":[]}"));
         Assert.Throws<InvalidOperationException>(() => ManifestJson.Parse("{\"routes\":[]}"));
+    }
+
+    private sealed class Lines : ILogger
+    {
+        public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception), exception));
+    }
+
+    [Fact]
+    public async Task AQueryThatFailsIsLoggedAsAWarningWithTheRouteAndOperation()
+    {
+        var log = new Lines();
+
+        var page = await new InitialData(Manifest, log).RenderAsync("/articles/7", Html, (_, _, _, _, _) => throw new InvalidOperationException("schema drifted"), Token);
+
+        Assert.Equal(Html, page.Body);
+
+        var (level, message, exception) = Assert.Single(log.Entries);
+
+        Assert.Equal(LogLevel.Warning, level);
+        Assert.Contains("/articles/:id", message, StringComparison.Ordinal);
+        Assert.Contains("ArticleQuery", message, StringComparison.Ordinal);
+        Assert.Equal("schema drifted", exception!.Message);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("[]")]
+    public async Task AnAbsentOrUnusableResponseIsLoggedAtDebug(string? body)
+    {
+        var log = new Lines();
+
+        await new InitialData(Manifest, log).RenderAsync("/articles/7", Html, new Recorder(body).Execute, Token);
+
+        var (level, message, _) = Assert.Single(log.Entries);
+
+        Assert.Equal(LogLevel.Debug, level);
+        Assert.Contains("ArticleQuery", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NothingIsLoggedWhenNothingWentWrong()
+    {
+        var log = new Lines();
+
+        await new InitialData(Manifest, log).RenderAsync("/articles/7", Html, new Recorder("{\"data\":{}}").Execute, Token);
+        await new InitialData(Manifest, log).RenderAsync("/missing", Html, new Recorder("{\"data\":{}}").Execute, Token);
+
+        Assert.Empty(log.Entries);
     }
 }

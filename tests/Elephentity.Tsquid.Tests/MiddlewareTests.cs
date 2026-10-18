@@ -32,13 +32,18 @@ public sealed partial class MiddlewareTests
     {
         public static List<IReadOnlyDictionary<string, object?>> Calls { get; } = [];
 
-        public ValueTask<object?> RunQueryAsync(string entity, string query, IReadOnlyDictionary<string, object?> args, CancellationToken cancellationToken = default)
+        public async ValueTask<object?> RunQueryAsync(string entity, string query, IReadOnlyDictionary<string, object?> args, CancellationToken cancellationToken = default)
         {
             Calls.Add(args);
 
+            if (http.HttpContext!.Request.Headers.ContainsKey("X-Slow"))
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+
             var name = http.HttpContext!.Request.Headers["X-Viewer"].ToString();
 
-            return ValueTask.FromResult<object?>(new Viewer(name, name));
+            return new Viewer(name, name);
         }
 
         public ValueTask<object?> FindAsync(string entity, EntityId id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -103,7 +108,7 @@ public sealed partial class MiddlewareTests
                 new Dictionary<string, VariableBinding> { ["name"] = new("name", false, null) })),
     ]);
 
-    private static async Task<IHost> Serve(Func<HttpContext, ValueTask<string?>>? shell = null) => await new HostBuilder()
+    private static async Task<IHost> Serve(Func<HttpContext, ValueTask<string?>>? shell = null, TimeSpan? timeout = null) => await new HostBuilder()
         .ConfigureWebHost(web => web
             .UseTestServer()
             .ConfigureServices(services =>
@@ -124,7 +129,7 @@ public sealed partial class MiddlewareTests
 
                     return next(http);
                 });
-                app.UseElephentityTsquid(Routes(), shell ?? (_ => ValueTask.FromResult<string?>(Shell)));
+                app.UseElephentityTsquid(Routes(), shell ?? (_ => ValueTask.FromResult<string?>(Shell)), timeout: timeout);
                 app.Run(context =>
                 {
                     context.Response.StatusCode = StatusCodes.Status404NotFound;
@@ -241,5 +246,27 @@ public sealed partial class MiddlewareTests
         using var client = host.GetTestClient();
 
         Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(Navigate("/me"), Token)).StatusCode);
+    }
+
+    [Fact]
+    public async Task ASlowQueryIsAbandonedAndThePlainShellServedWithoutCaching()
+    {
+        using var host = await Serve(timeout: TimeSpan.FromMilliseconds(150));
+        using var client = host.GetTestClient();
+        using var request = Navigate("/me");
+        request.Headers.Add("X-Slow", "1");
+
+        var started = DateTimeOffset.UtcNow;
+        var response = await client.SendAsync(request, Token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(Shell, await response.Content.ReadAsStringAsync(Token));
+        Assert.Null(response.Headers.CacheControl);
+        Assert.True(DateTimeOffset.UtcNow - started < TimeSpan.FromSeconds(5));
+
+        // The next, fast request still gets its data: one abandoned query is not a broken page.
+        var fast = await (await client.SendAsync(Navigate("/me"), Token)).Content.ReadAsStringAsync(Token);
+
+        Assert.Contains("id=\"tsquid-data\"", fast, StringComparison.Ordinal);
     }
 }

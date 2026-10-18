@@ -191,6 +191,9 @@ SKILL, whose `vectors.json` runs in the tests. Where the C# differs from the PHP
   ASP.NET Core the viewer lives in the request's services. It returns the response body as JSON text (null on a transport failure), so this
   package knows no GraphQL type; the middleware adapts `ElephentityGraphQLExecutor`.
 - **Async,** like everything that can reach storage.
+- **A timeout.** The SKILL says not to block the HTML on a slow query. PHP cannot interrupt a synchronous executor, so it leaves that to the
+  callback; the middleware owns the execution here, so `UseElephentityTsquid` takes a `timeout` (one second by default).
+- **A failed query is logged** (an optional `ILogger` on `InitialData`), not swallowed silently.
 - **`RouteManifest` and `ManifestJson`.** The manifest is data (`RouteManifest`) with a JSON reader for apps that load the committed
   `routes.manifest.json` at deploy time and for the conformance vectors; the C# builder (step 20) emits the same data as code.
 - **Escaping.** `<` is escaped to `\u003c` (as the SKILL says) and not `>` (PHP's `JSON_HEX_TAG` escapes both), and U+2028/U+2029 are escaped.

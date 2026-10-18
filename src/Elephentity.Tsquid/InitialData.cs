@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Elephentity.Tsquid.Manifest;
+using Microsoft.Extensions.Logging;
 
 namespace Elephentity.Tsquid;
 
@@ -31,15 +32,28 @@ public delegate Task<string?> ExecuteQuery(
 /// </remarks>
 public sealed partial class InitialData
 {
+    private static readonly Action<ILogger, string, string, Exception> Failed = LoggerMessage.Define<string, string>(
+        LogLevel.Warning,
+        new EventId(1, "InitialDataFailed"),
+        "The initial data for route {Route} (operation {Operation}) could not be inlined; the shell is served and the client will fetch.");
+
+    private static readonly Action<ILogger, string, string, Exception?> NoResponse = LoggerMessage.Define<string, string>(
+        LogLevel.Debug,
+        new EventId(2, "InitialDataNoResponse"),
+        "The query for route {Route} (operation {Operation}) gave no GraphQL response; the shell is served.");
+
     private readonly RouteManifest manifest;
+    private readonly ILogger? log;
 
     /// <summary>Creates the renderer.</summary>
     /// <param name="manifest">The app's routes.</param>
-    public InitialData(RouteManifest manifest)
+    /// <param name="log">Where a query that could not be inlined is reported; nothing is logged when omitted.</param>
+    public InitialData(RouteManifest manifest, ILogger? log = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
 
         this.manifest = manifest;
+        this.log = log;
     }
 
     /// <summary>The page for a URL: the shell, with the route's data inlined when there is some.</summary>
@@ -78,14 +92,25 @@ public sealed partial class InitialData
 
             if (body is null || !IsResponse(body))
             {
+                if (log is not null)
+                {
+                    NoResponse(log, match.Route.Path, query.Operation, null);
+                }
+
                 return plain;
             }
 
             payload = Payload(query.Operation, variables, body);
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception exception)
         {
-            // A failing query must never fail the page.
+            // A failing query must never fail the page, and neither must a slow one: cancellation (the request going away, or the
+            // middleware's timeout) is also just "inline nothing". It is said where someone looking will find it.
+            if (log is not null)
+            {
+                Failed(log, match.Route.Path, query.Operation, exception);
+            }
+
             return plain;
         }
 
