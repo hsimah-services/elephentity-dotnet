@@ -127,6 +127,8 @@ internal static class BookModel
         public override IReadOnlyList<string> FieldNames(string entity) =>
             entity == "Book" ? ["title", "status", "publishedAt", "pages", "rating", "inPrint", "tags"] : ["name"];
 
+        public override IReadOnlyList<string> QueryArguments(string entity, string query) => query == "search" ? ["text", "status"] : ["slug"];
+
         public override IReadOnlyList<string> RequiredFields(string entity) => entity == "Book" ? ["title", "status"] : ["name"];
 
         public override IEntityReadPolicies ReadPolicies(string entity) => entity == "Book" ? new HideSecrets() : base.ReadPolicies(entity);

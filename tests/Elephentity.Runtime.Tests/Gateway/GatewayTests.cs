@@ -60,10 +60,12 @@ public sealed class GatewayTests
     {
         var runtime = Build(new FakeStorage(), new GatewayCatalogue());
 
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var failure = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
             runtime.UpdateAsync("Post", EntityId.Of(9), new Dictionary<string, object?>(), Token));
 
         Assert.Contains("no Post with id 9", failure.Message, StringComparison.Ordinal);
+        Assert.Equal("Post", failure.Entity);
+        Assert.Equal(EntityId.Of(9), failure.Id);
     }
 
     [Fact]

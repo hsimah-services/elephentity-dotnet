@@ -192,7 +192,7 @@ public sealed class MutationLifecycleTests
         await runtime.DeleteAsync("Post", EntityId.Of(1), Token);
 
         Assert.Null(await storage.GetAsync("Post", EntityId.Of(1), Token));
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<EntityNotFoundException>(() =>
             runtime.UpdateAsync("Post", EntityId.Of(1), new Dictionary<string, object?> { ["title"] = "x" }, Token));
     }
 
