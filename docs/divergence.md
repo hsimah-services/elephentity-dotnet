@@ -181,3 +181,17 @@ same spec: `tests/fixtures/graphql/book-author.graphql` is what the PHP package 
   `EntityNotFoundException` (an `InvalidOperationException` subclass, so nothing that caught the old exception stops catching it).
 - **Declared collection queries must come back as `IEntityQuery<object>`** from `IEntityCatalogue.RunQueryAsync`; the C# builder's
   catalogue returns a typed query today, so it needs `.AsObjects()` there.
+
+## Step 19: Tsquid
+
+`Elephentity.Tsquid` ports `elephentity-codegen-tsquid` (`Manifest`, `InitialData`, `HtmlResponse`) and follows the tsquid server-integration
+SKILL, whose `vectors.json` runs in the tests. Where the C# differs from the PHP:
+
+- **The executor is passed per render, not at construction.** `InitialData.RenderAsync(url, html, execute, ct)` takes the delegate, because in
+  ASP.NET Core the viewer lives in the request's services. It returns the response body as JSON text (null on a transport failure), so this
+  package knows no GraphQL type; the middleware adapts `ElephentityGraphQLExecutor`.
+- **Async,** like everything that can reach storage.
+- **`RouteManifest` and `ManifestJson`.** The manifest is data (`RouteManifest`) with a JSON reader for apps that load the committed
+  `routes.manifest.json` at deploy time and for the conformance vectors; the C# builder (step 20) emits the same data as code.
+- **Escaping.** `<` is escaped to `\u003c` (as the SKILL says) and not `>` (PHP's `JSON_HEX_TAG` escapes both), and U+2028/U+2029 are escaped.
+- **`FieldKind` is `Text`, `Whole`, `Flag`** (a .NET analyzer refuses `String` and `Int`).

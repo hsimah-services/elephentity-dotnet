@@ -46,10 +46,10 @@ if [ -t 0 ] && [ -t 1 ]; then
     TTY_ARGS=(-it)
 fi
 
-# The Cosmos tests run against the emulator when told where it is (ELEPH_COSMOS_ENDPOINT, ELEPH_COSMOS_KEY) and
+# The Cosmos tests run against the emulator when told where it is (ELEPH_COSMOS_ENDPOINT, ELEPH_COSMOS_KEY; TSQUID_PAYLOAD_OUT names a file the tsquid tests write their payload to, for the real-client check) and
 # skip otherwise. ELEPH_DOTNET_NETWORK=host lets the container reach an emulator published on the host's loopback.
 ENV_ARGS=()
-for variable in ELEPH_COSMOS_ENDPOINT ELEPH_COSMOS_KEY; do
+for variable in ELEPH_COSMOS_ENDPOINT ELEPH_COSMOS_KEY TSQUID_PAYLOAD_OUT; do
     if [ -n "${!variable:-}" ]; then
         ENV_ARGS+=(-e "$variable=${!variable}")
     fi
