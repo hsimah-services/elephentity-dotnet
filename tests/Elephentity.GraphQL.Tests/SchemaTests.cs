@@ -116,4 +116,53 @@ public sealed class SchemaTests
         Assert.Contains("  \"\"\"\n  First line.\n  Second \"line\".\n  \"\"\"\n  body: String", sdl, StringComparison.Ordinal);
         Assert.Contains("  \"has\\ttab\\u0001control\"\n  tab: String", sdl, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AFieldThatGivesBothReadersOrNeitherIsReportedWhenTheSchemaIsBuilt()
+    {
+        foreach (var field in new[]
+        {
+            new FieldEntry("body", new("String"), null),
+            new FieldEntry("body", new("String"), source => source, ReadAsync: (source, token) => ValueTask.FromResult<object?>(source)),
+        })
+        {
+            var manifest = new GraphQLManifest(
+                objects: new Dictionary<string, ObjectTypeEntry>
+                {
+                    ["Note"] = new("Note", "Note", new Dictionary<string, FieldEntry> { ["body"] = field }, source => source is string, interfaces: []),
+                });
+
+            var failure = Assert.Throws<InvalidOperationException>(() => ElephentitySchema.Build(manifest));
+
+            Assert.Contains("Note.body must give exactly one of Read and ReadAsync", failure.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void TwoConnectionsThatMakeTheSameTypeNameFromDifferentTargetsAreReportedWithBothTargets()
+    {
+        // "AToB" + "To" + "C" and "A" + "To" + "BToC" are both AToBToCConnection.
+        ObjectTypeEntry Type(string name, string connectionTo, string field) => new(
+            name,
+            name,
+            new Dictionary<string, FieldEntry> { ["id"] = new("id", new("ID", NonNull: true), source => source) },
+            source => source is string,
+            new Dictionary<string, ConnectionEntry> { [field] = new(field, name, connectionTo, field, source => throw new NotSupportedException()) },
+            interfaces: []);
+
+        var manifest = new GraphQLManifest(
+            objects: new Dictionary<string, ObjectTypeEntry>
+            {
+                ["AToB"] = Type("AToB", "C", "first"),
+                ["A"] = Type("A", "BToC", "second"),
+                ["C"] = new("C", "C", new Dictionary<string, FieldEntry> { ["id"] = new("id", new("ID", NonNull: true), source => source) }, source => source is string, interfaces: []),
+                ["BToC"] = new("BToC", "BToC", new Dictionary<string, FieldEntry> { ["id"] = new("id", new("ID", NonNull: true), source => source) }, source => source is string, interfaces: []),
+            });
+
+        var failure = Assert.Throws<InvalidOperationException>(() => ElephentitySchema.Build(manifest));
+
+        Assert.Contains("targets both", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("\"C\"", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("\"BToC\"", failure.Message, StringComparison.Ordinal);
+    }
 }

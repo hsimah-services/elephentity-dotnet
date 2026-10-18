@@ -173,7 +173,9 @@ same spec: `tests/fixtures/graphql/book-author.graphql` is what the PHP package 
 - **`totalCount` is counted only when selected.**
 - **Page sizes are options** (`DefaultPageSize` 10, `MaxPageSize` 100). The reference application, hblake, configures 20.
 - **Edge connections page the lazy query**, as PHP does. Batching a to-many edge across parents through a DataLoader is deferred:
-  `CachingEdgeLoader.PreloadAsync` has no per-parent limit or order, so it would ignore `first`/`after`. See the follow-up,
+  `CachingEdgeLoader.PreloadAsync` has no per-parent limit or order, so it would ignore `first`/`after`. To-one fields are not
+  batched either: a to-one edge is a `FieldEntry` with an opaque `ReadAsync`, so the schema cannot tell which edge to preload without
+  a manifest change, and each costs a query per parent (cached per request). See the follow-up,
   #15.
 - **Runtime additions.** `EntityQueries.AsObjects` (the inverse of `Cast`, for the untyped gateway surface) and
   `EntityNotFoundException` (an `InvalidOperationException` subclass, so nothing that caught the old exception stops catching it).

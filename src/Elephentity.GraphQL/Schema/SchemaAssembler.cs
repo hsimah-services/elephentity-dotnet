@@ -171,6 +171,11 @@ internal sealed partial class SchemaAssembler(GraphQLManifest manifest, Elephent
 
         foreach (var field in entry.Fields.Values)
         {
+            if ((field.Read is null) == (field.ReadAsync is null))
+            {
+                throw new InvalidOperationException($"{entry.Name}.{field.Name} must give exactly one of Read and ReadAsync.");
+            }
+
             type.AddField(Field(field.Name, field.Type.ToGraphType(), field.Description ?? string.Empty, new DelegateResolver(context => Read(field, entry.Name, context))));
         }
 
