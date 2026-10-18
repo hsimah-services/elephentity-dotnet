@@ -21,12 +21,6 @@ public sealed class ElephentityGraphQLOptions
     /// <summary>The most complex a query may be, or <see langword="null" /> for no limit. The clog reference uses 500.</summary>
     public int? MaxComplexity { get; set; }
 
-    /// <summary>
-    /// The most bytes of request body the endpoint reads; a larger one is refused with 413. A GraphQL query is text, and the
-    /// default is generous for it.
-    /// </summary>
-    public int MaxRequestBytes { get; set; } = 1_000_000;
-
     internal void Validate()
     {
         if (DefaultPageSize < 1)
@@ -39,7 +33,7 @@ public sealed class ElephentityGraphQLOptions
             throw new InvalidOperationException("ElephentityGraphQLOptions.MaxPageSize must not be smaller than DefaultPageSize.");
         }
 
-        if (MaxDepth is < 1 || MaxComplexity is < 1 || MaxRequestBytes < 1)
+        if (MaxDepth is < 1 || MaxComplexity is < 1)
         {
             throw new InvalidOperationException("ElephentityGraphQLOptions limits must be positive.");
         }

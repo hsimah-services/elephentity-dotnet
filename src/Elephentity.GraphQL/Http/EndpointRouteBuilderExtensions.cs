@@ -19,7 +19,8 @@ public static class EndpointRouteBuilderExtensions
     /// <returns>The endpoint's convention builder, for authorization, CORS and the rest.</returns>
     /// <remarks>
     /// Only <c>POST</c> with <c>application/json</c>: a mutation must not be reachable by a link, and the HTTP concerns that are not
-    /// GraphQL's (sessions, CSRF, authentication) belong to the application's own middleware.
+    /// GraphQL's (sessions, CSRF, authentication, a body-size limit) belong to ASP.NET Core: Kestrel refuses an oversized body, and
+    /// a tighter limit for this route is <c>RequestSizeLimitAttribute</c> metadata on the builder this returns.
     /// </remarks>
     public static IEndpointConventionBuilder MapElephentityGraphQL(this IEndpointRouteBuilder endpoints, string pattern = "/graphql")
     {
@@ -31,7 +32,6 @@ public static class EndpointRouteBuilderExtensions
     private static async Task HandleAsync(HttpContext http)
     {
         var executor = http.RequestServices.GetRequiredService<ElephentityGraphQLExecutor>();
-        var options = http.RequestServices.GetRequiredService<ElephentityGraphQLOptions>();
 
         if (!http.Request.HasJsonContentType())
         {
@@ -40,29 +40,11 @@ public static class EndpointRouteBuilderExtensions
             return;
         }
 
-        using var body = new MemoryStream();
-        var buffer = new byte[8192];
-        int read;
-
-        while ((read = await http.Request.Body.ReadAsync(buffer, http.RequestAborted).ConfigureAwait(false)) > 0)
-        {
-            if (body.Length + read > options.MaxRequestBytes)
-            {
-                await Refuse(http, StatusCodes.Status413PayloadTooLarge, "The request is too large.").ConfigureAwait(false);
-
-                return;
-            }
-
-            body.Write(buffer, 0, read);
-        }
-
-        body.Position = 0;
-
         GraphQLRequest? request;
 
         try
         {
-            request = await executor.Serializer.ReadAsync<GraphQLRequest>(body, http.RequestAborted).ConfigureAwait(false);
+            request = await executor.Serializer.ReadAsync<GraphQLRequest>(http.Request.Body, http.RequestAborted).ConfigureAwait(false);
         }
         catch (System.Text.Json.JsonException)
         {

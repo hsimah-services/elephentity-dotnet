@@ -168,11 +168,13 @@ same spec: `tests/fixtures/graphql/book-author.graphql` is what the PHP package 
   registered; a wrong-type global id is an error; a malformed cursor is an error; backward paging is refused; `first: 0` is an empty
   page; errors map to `extensions.code` (`FORBIDDEN`, `BAD_USER_INPUT` with `violations`, `NOT_FOUND`, masked `INTERNAL`).
 - **Cursors are the runtime's keyset cursors.** A page knows where it ends, not where each row is, so only the last edge of a page
-  carries a cursor (also `pageInfo.endCursor`). PHP's positional cursors gave every edge one.
+  carries a cursor (also `pageInfo.endCursor`). PHP's positional cursors gave every edge one. So `pageInfo.startCursor` is null unless the
+  page holds a single row, and `endCursor` is null on the last page; in PHP they always named the first and last edge.
 - **`totalCount` is counted only when selected.**
 - **Page sizes are options** (`DefaultPageSize` 10, `MaxPageSize` 100). The reference application, hblake, configures 20.
-- **Edge connections page the lazy query**, as PHP does. Batching a to-many edge across parents through a DataLoader would load
-  the whole edge for each parent and is left out.
+- **Edge connections page the lazy query**, as PHP does. Batching a to-many edge across parents through a DataLoader is deferred:
+  `CachingEdgeLoader.PreloadAsync` has no per-parent limit or order, so it would ignore `first`/`after`. See the follow-up,
+  #15.
 - **Runtime additions.** `EntityQueries.AsObjects` (the inverse of `Cast`, for the untyped gateway surface) and
   `EntityNotFoundException` (an `InvalidOperationException` subclass, so nothing that caught the old exception stops catching it).
 - **Declared collection queries must come back as `IEntityQuery<object>`** from `IEntityCatalogue.RunQueryAsync`; the C# builder's

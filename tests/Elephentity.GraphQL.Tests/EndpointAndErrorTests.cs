@@ -19,9 +19,9 @@ public sealed class EndpointAndErrorTests
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    private static async Task<IHost> Serve(ElephentityGraphQLOptions? options = null)
+    private static async Task<IHost> Serve()
     {
-        var inner = new Host(options);
+        var inner = new Host();
 
         return await new HostBuilder()
             .ConfigureWebHost(web => web
@@ -30,7 +30,7 @@ public sealed class EndpointAndErrorTests
                 {
                     services.AddRouting();
                     services.AddSingleton(inner.Services.GetRequiredService<Elephentity.Runtime.Gateway.IEntityGateway>());
-                    services.AddElephentityGraphQL(BookModel.Manifest(), configured => configured.MaxRequestBytes = options?.MaxRequestBytes ?? 1_000_000);
+                    services.AddElephentityGraphQL(BookModel.Manifest());
                 })
                 .Configure(app => app.UseRouting().UseEndpoints(endpoints => endpoints.MapElephentityGraphQL("/graphql"))))
             .StartAsync(Token);
@@ -54,16 +54,28 @@ public sealed class EndpointAndErrorTests
     [Fact]
     public async Task ARequestThatIsNotAQueryIsRefusedBeforeItRuns()
     {
-        using var host = await Serve(new ElephentityGraphQLOptions { MaxRequestBytes = 200 });
+        using var host = await Serve();
         using var client = host.GetTestClient();
 
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.GetAsync("/graphql?query={__typename}", Token)).StatusCode);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await client.PostAsync("/graphql", new StringContent("{}", Encoding.UTF8, "text/plain"), Token)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/graphql", new StringContent("{not json", Encoding.UTF8, "application/json"), Token)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/graphql", new StringContent("{}", Encoding.UTF8, "application/json"), Token)).StatusCode);
-        Assert.Equal(
-            HttpStatusCode.RequestEntityTooLarge,
-            (await client.PostAsync("/graphql", new StringContent("{\"query\":\"" + new string('x', 400) + "\"}", Encoding.UTF8, "application/json"), Token)).StatusCode);
+    }
+
+    [Fact]
+    public async Task AVariableThatDoesNotCoerceKeepsGraphQlsOwnCodeAndMessage()
+    {
+        var host = new Host();
+
+        foreach (var value in new object[] { "abc", 99999999999L })
+        {
+            var result = await host.Run("query($n: Int) { books(first: $n) { totalCount } }", new { n = value });
+            var error = result.GetProperty("errors")[0];
+
+            Assert.NotEqual("INTERNAL", error.GetProperty("extensions").GetProperty("code").GetString());
+            Assert.DoesNotContain("Internal server error", error.GetProperty("message").GetString(), StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -74,7 +86,7 @@ public sealed class EndpointAndErrorTests
             new FieldViolation("Book", "pages", new Violation("range", "Too many.")),
         ]);
 
-        var info = new ElephentityErrorInfoProvider().GetInfo(new ExecutionError("x", rejected));
+        var info = new ElephentityErrorInfoProvider().GetInfo(new global::GraphQL.Execution.UnhandledError("x", rejected));
         var violations = Assert.IsType<List<Dictionary<string, object?>>>(info.Extensions!["violations"]);
 
         Assert.Equal("BAD_USER_INPUT", info.Extensions["code"]);

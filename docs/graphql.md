@@ -37,3 +37,8 @@ application's own middleware.
 `tests/fixtures/graphql/regenerate.sh` rebuilds `book-author.graphql` from the PHP package in containers (PHP for the schema,
 node for graphql-js's `printSchema`). `tests/Elephentity.GraphQL.Tests/BookModel.cs` is the C# twin of `book-author.php`; change one,
 change the other, regenerate, and the SDL test says whether they still agree.
+
+## Running the tests
+
+`./tools/dotnet dotnet test tests/Elephentity.GraphQL.Tests` runs this package's tests. (`dotnet test --filter` over the whole
+solution runs zero tests in the other projects, which Microsoft.Testing.Platform reports as exit code 8 even when everything passed.)
