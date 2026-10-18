@@ -112,6 +112,30 @@ public sealed class EndpointAndErrorTests
     }
 
     [Fact]
+    public async Task AFieldThatNeedsIoIsReadAsynchronously()
+    {
+        var manifest = new GraphQLManifest(
+            objects: new Dictionary<string, ObjectTypeEntry>
+            {
+                ["Note"] = new("Note", "Note", new Dictionary<string, FieldEntry>
+                {
+                    ["id"] = new("id", new("ID", NonNull: true), _ => "1"),
+                    ["author"] = new("author", new("String"), null, ReadAsync: async (_, token) =>
+                    {
+                        await Task.Yield();
+
+                        return "Ada";
+                    }),
+                }, source => source is string),
+            },
+            roots: new Dictionary<string, RootFieldEntry> { ["Note"] = new("Note", "Notes", "Note") });
+        var result = await new ElephentityGraphQLExecutor(Elephentity.GraphQL.Schema.ElephentitySchema.Build(manifest), new ElephentityGraphQLOptions())
+            .ExecuteToJsonAsync(new global::GraphQL.Transport.GraphQLRequest { Query = "{ note(id: \"1\") { author } }" }, new SingleService(new FakeGateway()), Token);
+
+        Assert.Contains("\"author\":\"Ada\"", result, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GlobalIdsKeepTheEncodingTheTypeScriptClientAlreadyHolds()
     {
         Assert.Equal("ZWxlcGg6Qm9vazoxMg==", GlobalId.Encode("Book", "12"));

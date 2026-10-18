@@ -160,6 +160,7 @@ same spec: `tests/fixtures/graphql/book-author.graphql` is what the PHP package 
 - **Delegates, not accessor names.** PHP's `FieldEntry` and `ConnectionEntry` name a method and call it; C# carries the accessor
   (`Func<object, object?>`, `Func<object, IEntityQuery<object>>`) and `ObjectTypeEntry` an `IsInstance` delegate, so nothing uses
   reflection and the compiler checks the generated manifest against the read models.
+- **`ReadAsync`.** A to-one edge costs a query (`GetAuthorAsync` on the read model), so `FieldEntry` can carry an async reader instead of `Read`.
 - **No `BackedEnum` encoding.** The generated `<Enum>Wire` class turns a C# enum into its stored value, so the field's delegate
   returns the stored value and the encoding is `Value`.
 - **`GraphQLManifest`, `MutationKind`** replace `Manifest` and the string constants.

@@ -10,14 +10,19 @@ namespace Elephentity.GraphQL.Manifest;
 /// </remarks>
 /// <param name="Name">The GraphQL field name.</param>
 /// <param name="Type">The GraphQL type.</param>
-/// <param name="Read">Reads the field's domain value from the read model.</param>
+/// <param name="Read">Reads the field's domain value from the read model. Null for a field that needs I/O: see <paramref name="ReadAsync" />.</param>
 /// <param name="Description">The description, or <see langword="null" />.</param>
 /// <param name="Encoding">How the value travels.</param>
 /// <param name="ValueType">The declared type whose processor unwinds the value. <see cref="FieldEncoding.Processor" /> only.</param>
+/// <param name="ReadAsync">
+/// Reads a value that costs a query, such as a to-one edge (<c>GetAuthorAsync</c> on the read model), instead of <paramref name="Read" />.
+/// Exactly one of the two is given.
+/// </param>
 public sealed record FieldEntry(
     string Name,
     GraphQLType Type,
-    Func<object, object?> Read,
+    Func<object, object?>? Read,
     string? Description = null,
     FieldEncoding Encoding = FieldEncoding.Value,
-    string? ValueType = null);
+    string? ValueType = null,
+    Func<object, CancellationToken, ValueTask<object?>>? ReadAsync = null);

@@ -182,9 +182,14 @@ internal sealed partial class SchemaAssembler(GraphQLManifest manifest, Elephent
         return type;
     }
 
-    private static object? Read(FieldEntry field, string typeName, IResolveFieldContext context)
+    private static async ValueTask<object?> Read(FieldEntry field, string typeName, IResolveFieldContext context)
     {
-        var value = field.Read(context.Source!);
+        var value = field switch
+        {
+            { ReadAsync: { } readAsync } => await readAsync(context.Source!, context.CancellationToken).ConfigureAwait(false),
+            { Read: { } read } => read(context.Source!),
+            _ => throw new InvalidOperationException($"{typeName}.{field.Name} has neither Read nor ReadAsync."),
+        };
 
         return value is null ? null : Encode(value, field, typeName, context);
     }
