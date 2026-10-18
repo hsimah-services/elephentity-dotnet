@@ -279,7 +279,15 @@ internal sealed partial class SchemaAssembler(GraphQLManifest manifest, Elephent
         IReadOnlyDictionary<string, GraphQLType>? whereArgs,
         Func<IResolveFieldContext, ValueTask<object?>> resolve)
     {
+        // A published query is named by its field, so two of them returning one type do not share a connection; one that takes no arguments
+        // has nothing to put in a `where`, and an input object with no fields is not valid GraphQL, so it gets no `where` at all.
         var name = $"{fromName}To{(whereArgs is null ? to : UpperFirst(fieldName))}Connection";
+
+        if (whereArgs is { Count: 0 })
+        {
+            whereArgs = null;
+            name = $"{fromName}To{UpperFirst(fieldName)}Connection";
+        }
 
         // Two edges from one type to another (a Post's `related` and its inverse `relatedFrom`) are two fields of one connection
         // type, as in PHP, where registering the type again was a harmless overwrite. Two targets under one name is a defect.
