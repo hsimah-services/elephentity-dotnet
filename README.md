@@ -1,3 +1,9 @@
+> **Archived: this repository moved into [`hsimah-services/elephentity`](https://github.com/hsimah-services/elephentity/tree/main/dotnet).**
+> It is `dotnet/` there, with the .NET runtime and adaptors. C# is now the primary target, and one repository lets a
+> change to the compiler, a builder and the .NET runtime land in one pull request, with one CI and one
+> set of issues. The history was not carried over; this repository keeps it, read-only. NuGet packages are published from `dotnet-v*` tags there.
+> Open issues and pull requests go to `elephentity`.
+
 # Elephentity for .NET
 
 The .NET side of [Elephentity](https://github.com/hsimah-services/elephentity): the runtime
